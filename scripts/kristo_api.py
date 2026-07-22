@@ -26,7 +26,7 @@ from eth_utils import to_checksum_address
 # ==========================================
 WALLET_ADDRESS = os.getenv(
     "WALLET_ADDRESS",
-    "0xYourBaseWalletAddressHere"  # СЛОЖИ ТВОЯ АДРЕС ТУК!
+    "0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f"
 )
 PRICE_USDC = os.getenv("PRICE_USDC", "0.25")
 NETWORK = "base"
