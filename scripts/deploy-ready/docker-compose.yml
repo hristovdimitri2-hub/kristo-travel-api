@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  kristo-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - WALLET_ADDRESS=${WALLET_ADDRESS}
+      - BASE_RPC_URL=${BASE_RPC_URL:-https://mainnet.base.org}
+      - PRICE_USDC=${PRICE_USDC:-0.25}
+      - PORT=8000
+    restart: unless-stopped
