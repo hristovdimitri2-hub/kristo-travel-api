@@ -8,10 +8,17 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Kristo Travel Intelligence | x402 Dashboard",
-  description: "Pay-per-call travel data API dashboard. Monitor USDC payments on Base network.",
+  title: "Kristo Intelligence | x402 Dashboard",
+  description: "Pay-per-call API dashboard. Monitor USDC payments on Base.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Kristo",
+  },
   icons: {
     icon: "/logo.svg",
+    apple: "/logo.svg",
   },
 };
 
@@ -22,6 +29,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="bg" suppressHydrationWarning>
+      <head>
+        <meta name="theme-color" content="#09090b" />
+        <link rel="apple-touch-icon" href="/logo.svg" />
+      </head>
       <body className={`${inter.variable} antialiased`}>
         {children}
       </body>
