@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import {
   Activity,
   CircleDollarSign,
@@ -18,7 +17,12 @@ import {
   Zap,
   Shield,
   Send,
-  Server
+  Server,
+  AlertTriangle,
+  TrendingUp,
+  ExternalLink,
+  Bell,
+  BellOff
 } from 'lucide-react'
 
 interface HealthData {
@@ -42,6 +46,21 @@ interface X402Response {
   error: string
 }
 
+interface Transaction {
+  hash: string
+  from: string
+  value: string
+  timestamp: string
+  block: string
+}
+
+interface BasescanData {
+  transactions: Transaction[]
+  total_usdc: string
+  count_24h: number
+  error?: string
+}
+
 function StatusDot({ online }: { online: boolean }) {
   return (
     <span className={`inline-block w-2.5 h-2.5 rounded-full ${online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
@@ -54,11 +73,14 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [testing, setTesting] = useState(false)
   const [lastCheck, setLastCheck] = useState<string>('-')
-  const [logs, setLogs] = useState<Array<{ time: string; type: 'success' | 'error' | 'info'; message: string }>>([])
+  const [logs, setLogs] = useState<Array<{ time: string; type: 'success' | 'error' | 'info' | 'payment'; message: string }>>([])
+  const [basescan, setBasescan] = useState<BasescanData | null>(null)
+  const [monitoring, setMonitoring] = useState(true)
+  const prevTxCount = useRef(0)
 
-  const addLog = useCallback((type: 'success' | 'error' | 'info', message: string) => {
+  const addLog = useCallback((type: 'success' | 'error' | 'info' | 'payment', message: string) => {
     const now = new Date().toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-    setLogs(prev => [{ time: now, type, message }, ...prev].slice(0, 20))
+    setLogs(prev => [{ time: now, type, message }, ...prev].slice(0, 50))
   }, [])
 
   const checkHealth = useCallback(async () => {
@@ -68,16 +90,37 @@ export default function Home() {
       const json = await res.json()
       if (json.status === 200) {
         setHealth(json.data)
-        addLog('success', 'API е онлайн и работи')
       } else {
         setHealth(null)
         addLog('error', 'API не е наличен — Render може да спи')
       }
       setLastCheck(new Date().toLocaleTimeString('bg-BG'))
     } catch {
-      addLog('error', 'Грешка при свързване')
+      addLog('error', 'Грешка при свързване с API')
     }
     setLoading(false)
+  }, [addLog])
+
+  const checkPayments = useCallback(async () => {
+    try {
+      const res = await fetch('/api/basescan')
+      const data: BasescanData = await res.json()
+      setBasescan(data)
+
+      // Detect new payments
+      if (data.count_24h > prevTxCount.current && prevTxCount.current >= 0) {
+        const newCount = data.count_24h - prevTxCount.current
+        addLog('payment', `НОВА ПРОДАЖБА! +${data.total_usdc} USDC (${newCount} транзакции за 24ч)`)
+      }
+      prevTxCount.current = data.count_24h
+
+      // 24h no-sale warning
+      if (data.count_24h === 0 && !data.error) {
+        addLog('info', 'Няма продажби през последните 24 часа')
+      }
+    } catch {
+      // Basescan free tier rate limited - ignore
+    }
   }, [addLog])
 
   const testPayment = useCallback(async () => {
@@ -90,7 +133,7 @@ export default function Home() {
         setX402response(json.data)
         addLog('success', 'x402 връща 402 — чака плащане от 0.25 USDC')
       } else if (json.data?.product) {
-        addLog('success', 'Плащането е потвърдено! Данните са получени.')
+        addLog('payment', 'ПЛАЩАНЕ ПОТВЪРДЕНО! Данните са доставени.')
       } else {
         addLog('error', 'Неочакван отговор от API-то')
       }
@@ -100,9 +143,22 @@ export default function Home() {
     setTesting(false)
   }, [addLog])
 
+  // Initial load
   useEffect(() => {
     checkHealth()
-  }, [checkHealth])
+    checkPayments()
+  }, [checkHealth, checkPayments])
+
+  // Auto-monitoring every 60 seconds
+  useEffect(() => {
+    if (!monitoring) return
+    const interval = setInterval(() => {
+      checkPayments()
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [monitoring, checkPayments])
+
+  const noSales24h = basescan !== null && basescan.count_24h === 0 && !basescan.error
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-white">
@@ -118,19 +174,70 @@ export default function Home() {
               <p className="text-xs text-zinc-500">x402 Pay-per-Call Dashboard</p>
             </div>
           </div>
-          <Button
-            variant="outline" size="sm"
-            className="border-zinc-700 text-zinc-300"
-            onClick={checkHealth}
-            disabled={loading}
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Обнови
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost" size="icon"
+              className={monitoring ? 'text-emerald-400' : 'text-zinc-600'}
+              onClick={() => {
+                setMonitoring(!monitoring)
+                addLog('info', monitoring ? 'Авто-мониторинг спрян' : 'Авто-мониторинг включен (всеки 60с)')
+              }}
+              title={monitoring ? 'Спри мониторинга' : 'Включи мониторинга'}
+            >
+              {monitoring ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+            </Button>
+            <Button
+              variant="outline" size="sm"
+              className="border-zinc-700 text-zinc-300"
+              onClick={() => { checkHealth(); checkPayments() }}
+              disabled={loading}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Обнови
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 py-6 space-y-6 pb-20">
+
+        {/* 24h No-Sales Alert */}
+        {noSales24h && (
+          <Card className="border-amber-500/40 bg-amber-950/30">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-amber-300">Няма продажби през последните 24 часа</p>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    API-то работи, но нито един AI агент не е платил. За да генерирате трафик,
+                    трябва да регистрирате API-то в x402 каталог или да го свържете с AI платформа.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* New Sale Alert */}
+        {basescan && basescan.count_24h > 0 && (
+          <Card className="border-emerald-500/40 bg-emerald-950/30">
+            <CardContent className="p-4">
+              <div className="flex items-start gap-3">
+                <TrendingUp className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-emerald-300">
+                    {basescan.count_24h} {basescan.count_24h === 1 ? 'продажба' : 'продажби'} днес
+                  </p>
+                  <p className="text-2xl font-bold text-emerald-400 mt-1">${basescan.total_usdc} USDC</p>
+                </div>
+                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+                  LIVE
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Status Banner */}
         <Card className="border-zinc-800 bg-zinc-900/60">
@@ -141,6 +248,7 @@ export default function Home() {
                 <span className="font-medium">
                   {health ? 'API Онлайн' : 'API Недостъпен'}
                 </span>
+                {monitoring && <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 text-[10px] ml-1">АВТО</Badge>}
               </div>
               <div className="flex items-center gap-2 text-xs text-zinc-500">
                 <Clock className="w-3 h-3" />
@@ -149,6 +257,57 @@ export default function Home() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Revenue & Stats */}
+        <div className="grid grid-cols-2 gap-3">
+          <Card className="border-zinc-800 bg-zinc-900/60">
+            <CardContent className="p-3 text-center">
+              <CircleDollarSign className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
+              <p className="text-xl font-bold text-zinc-100">${basescan?.total_usdc || '0.00'}</p>
+              <p className="text-[10px] text-zinc-500">Приходи 24ч (USDC)</p>
+            </CardContent>
+          </Card>
+          <Card className="border-zinc-800 bg-zinc-900/60">
+            <CardContent className="p-3 text-center">
+              <Activity className="w-5 h-5 text-sky-400 mx-auto mb-1" />
+              <p className="text-xl font-bold text-zinc-100">{basescan?.count_24h ?? '-'}</p>
+              <p className="text-[10px] text-zinc-500">Транзакции 24ч</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Recent Transactions */}
+        {basescan && basescan.transactions.length > 0 && (
+          <Card className="border-zinc-800 bg-zinc-900/60">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-400" />
+                Последни плащания
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {basescan.transactions.slice(0, 5).map((tx) => (
+                <div key={tx.hash} className="flex items-center justify-between bg-zinc-950/60 rounded-lg p-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-emerald-300">+${tx.value} USDC</p>
+                    <p className="text-[10px] text-zinc-500 font-mono">{tx.from.slice(0, 8)}...{tx.from.slice(-4)}</p>
+                  </div>
+                  <div className="text-right shrink-0 ml-3">
+                    <p className="text-[10px] text-zinc-500">{tx.timestamp}</p>
+                    <a
+                      href={`https://basescan.org/tx/${tx.hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-sky-400 flex items-center gap-0.5 justify-end"
+                    >
+                      Basescan <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {/* API Details */}
         {health && (
@@ -164,12 +323,8 @@ export default function Home() {
                 <InfoItem label="Мрежа" value={health.network.toUpperCase()} />
                 <InfoItem label="Web3" value={health.web3_connected ? 'Свързан' : 'Изключен'} />
               </div>
-              <div className="space-y-1">
-                <InfoItem label="Портфейл" value={`${health.wallet.slice(0, 8)}...${health.wallet.slice(-6)}`} />
-              </div>
-              <div className="space-y-1">
-                <InfoItem label="RPC" value={health.rpc} />
-              </div>
+              <InfoItem label="Портфейл" value={`${health.wallet.slice(0, 8)}...${health.wallet.slice(-6)}`} />
+              <InfoItem label="RPC" value={health.rpc} />
               <div className="pt-2">
                 <a
                   href={`https://basescan.org/address/${health.wallet}`}
@@ -184,57 +339,6 @@ export default function Home() {
           </Card>
         )}
 
-        {/* How It Works */}
-        <Card className="border-zinc-800 bg-zinc-900/60">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Shield className="w-4 h-4 text-amber-400" />
-              Как работи x402
-            </CardTitle>
-            <CardDescription className="text-zinc-500 text-xs">
-              Процесът на плащане стъпка по стъпка
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-0">
-            <FlowStep
-              step={1}
-              title="AI Агент прави заявка"
-              description="GET /travel/weekend-getaway"
-              icon={<Send className="w-4 h-4" />}
-            />
-            <FlowArrow />
-            <FlowStep
-              step={2}
-              title="API връща 402 Payment Required"
-              description="Указва: 0.25 USDC на Base към вашия портфейл"
-              icon={<XCircle className="w-4 h-4" />}
-              highlight="error"
-            />
-            <FlowArrow />
-            <FlowStep
-              step={3}
-              title="Агентът прати USDC на блокчейна"
-              description="Транзакцията се записва в Base мрежата"
-              icon={<CircleDollarSign className="w-4 h-4" />}
-            />
-            <FlowArrow />
-            <FlowStep
-              step={4}
-              title="Агентът повтаря заявката с TX hash"
-              description="X-PAYMENT хедър с доказателство за плащане"
-              icon={<ArrowRight className="w-4 h-4" />}
-            />
-            <FlowArrow />
-            <FlowStep
-              step={5}
-              title="API валидира на блокчейна"
-              description="Проверява tx, amount, recipient → връща данните"
-              icon={<CheckCircle2 className="w-4 h-4" />}
-              highlight="success"
-            />
-          </CardContent>
-        </Card>
-
         {/* Live Test */}
         <Card className="border-zinc-800 bg-zinc-900/60">
           <CardHeader className="pb-3">
@@ -242,9 +346,6 @@ export default function Home() {
               <Activity className="w-4 h-4 text-sky-400" />
               Тест на живо
             </CardTitle>
-            <CardDescription className="text-zinc-500 text-xs">
-              Симулирайте заявка от AI агент и вижте отговора
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <Button
@@ -268,47 +369,39 @@ export default function Home() {
                   <span className="text-sm font-medium text-amber-300">Payment Required</span>
                 </div>
                 <div className="text-xs space-y-1.5 text-zinc-400">
-                  <p>🔑 <span className="text-zinc-300">Сума:</span> {x402response.accepts.amount} {x402response.accepts.asset}</p>
-                  <p>🔗 <span className="text-zinc-300">Мрежа:</span> {x402response.accepts.network}</p>
-                  <p>💰 <span className="text-zinc-300">Към:</span> <span className="font-mono text-emerald-400">{x402response.accepts.payTo.slice(0, 10)}...{x402response.accepts.payTo.slice(-6)}</span></p>
-                  <p>📋 <span className="text-zinc-300">Описание:</span> {x402response.accepts.description}</p>
+                  <p>Сума: <span className="text-zinc-300">{x402response.accepts.amount} {x402response.accepts.asset}</span></p>
+                  <p>Мрежа: <span className="text-zinc-300">{x402response.accepts.network}</span></p>
+                  <p>Към: <span className="font-mono text-emerald-400">{x402response.accepts.payTo.slice(0, 10)}...{x402response.accepts.payTo.slice(-6)}</span></p>
                 </div>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Quick Stats */}
+        {/* Quick Info */}
         <div className="grid grid-cols-3 gap-3">
-          <StatCard
-            icon={<CircleDollarSign className="w-5 h-5 text-emerald-400" />}
-            label="Цена на заявка"
-            value="$0.25"
-          />
-          <StatCard
-            icon={<Globe className="w-5 h-5 text-sky-400" />}
-            label="Мрежа"
-            value="Base"
-          />
-          <StatCard
-            icon={<Wallet className="w-5 h-5 text-amber-400" />}
-            label="Актив"
-            value="USDC"
-          />
+          <Card className="border-zinc-800 bg-zinc-900/60">
+            <CardContent className="p-3 text-center">
+              <CircleDollarSign className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
+              <p className="text-lg font-bold text-zinc-100">$0.25</p>
+              <p className="text-[10px] text-zinc-500">Цена/заявка</p>
+            </CardContent>
+          </Card>
+          <Card className="border-zinc-800 bg-zinc-900/60">
+            <CardContent className="p-3 text-center">
+              <Globe className="w-5 h-5 text-sky-400 mx-auto mb-1" />
+              <p className="text-lg font-bold text-zinc-100">Base</p>
+              <p className="text-[10px] text-zinc-500">Мрежа</p>
+            </CardContent>
+          </Card>
+          <Card className="border-zinc-800 bg-zinc-900/60">
+            <CardContent className="p-3 text-center">
+              <Wallet className="w-5 h-5 text-amber-400 mx-auto mb-1" />
+              <p className="text-lg font-bold text-zinc-100">USDC</p>
+              <p className="text-[10px] text-zinc-500">Актив</p>
+            </CardContent>
+          </Card>
         </div>
-
-        {/* API URL */}
-        <Card className="border-zinc-800 bg-zinc-900/60">
-          <CardContent className="p-4">
-            <p className="text-xs text-zinc-500 mb-2">Вашият публичен API адрес:</p>
-            <div className="flex items-center gap-2 bg-zinc-950 rounded-lg p-3">
-              <Globe className="w-4 h-4 text-emerald-400 shrink-0" />
-              <code className="text-sm text-emerald-300 break-all select-all">
-                https://kristo-travel-api.onrender.com
-              </code>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Activity Log */}
         <Card className="border-zinc-800 bg-zinc-900/60">
@@ -322,14 +415,14 @@ export default function Home() {
             {logs.length === 0 ? (
               <p className="text-sm text-zinc-600 text-center py-4">Няма активност</p>
             ) : (
-              <div className="max-h-64 overflow-y-auto space-y-1">
+              <div className="max-h-72 overflow-y-auto space-y-1">
                 {logs.map((log, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs">
+                  <div key={i} className={`flex items-start gap-2 text-xs p-1.5 rounded ${log.type === 'payment' ? 'bg-emerald-950/30' : ''}`}>
                     <span className="text-zinc-600 font-mono shrink-0 pt-0.5">{log.time}</span>
-                    <span className={`shrink-0 ${log.type === 'success' ? 'text-emerald-400' : log.type === 'error' ? 'text-red-400' : 'text-sky-400'}`}>
-                      {log.type === 'success' ? '✓' : log.type === 'error' ? '✗' : 'ℹ'}
+                    <span className={`shrink-0 ${log.type === 'success' ? 'text-emerald-400' : log.type === 'error' ? 'text-red-400' : log.type === 'payment' ? 'text-emerald-300' : 'text-sky-400'}`}>
+                      {log.type === 'success' ? '✓' : log.type === 'error' ? '✗' : log.type === 'payment' ? '💰' : 'ℹ'}
                     </span>
-                    <span className="text-zinc-400">{log.message}</span>
+                    <span className={log.type === 'payment' ? 'text-emerald-200 font-medium' : 'text-zinc-400'}>{log.message}</span>
                   </div>
                 ))}
               </div>
@@ -348,58 +441,5 @@ function InfoItem({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-zinc-500">{label}</p>
       <p className="text-sm font-mono text-zinc-200">{value}</p>
     </div>
-  )
-}
-
-function FlowStep({ step, title, description, icon, highlight }: {
-  step: number; title: string; description: string; icon: React.ReactNode; highlight?: 'success' | 'error'
-}) {
-  const colorClass = highlight === 'success'
-    ? 'border-emerald-500/30 bg-emerald-950/20'
-    : highlight === 'error'
-    ? 'border-amber-500/30 bg-amber-950/20'
-    : 'border-zinc-800 bg-zinc-900/40'
-
-  const numColor = highlight === 'success'
-    ? 'bg-emerald-500 text-white'
-    : highlight === 'error'
-    ? 'bg-amber-500 text-white'
-    : 'bg-zinc-800 text-zinc-400'
-
-  return (
-    <div className={`rounded-lg border p-3 flex items-start gap-3 ${colorClass}`}>
-      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${numColor}`}>
-        {step}
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium flex items-center gap-2">
-          <span className={highlight === 'success' ? 'text-emerald-300' : highlight === 'error' ? 'text-amber-300' : ''}>
-            {title}
-          </span>
-        </p>
-        <p className="text-xs text-zinc-500 mt-0.5">{description}</p>
-      </div>
-      <div className="shrink-0 text-zinc-500 mt-0.5">{icon}</div>
-    </div>
-  )
-}
-
-function FlowArrow() {
-  return (
-    <div className="flex justify-center py-1">
-      <ArrowRight className="w-4 h-4 text-zinc-700" />
-    </div>
-  )
-}
-
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <Card className="border-zinc-800 bg-zinc-900/60">
-      <CardContent className="p-3 text-center">
-        <div className="flex justify-center mb-2">{icon}</div>
-        <p className="text-lg font-bold text-zinc-100">{value}</p>
-        <p className="text-[10px] text-zinc-500 mt-0.5">{label}</p>
-      </CardContent>
-    </Card>
   )
 }
