@@ -432,7 +432,87 @@ async def health():
     return {"status": "online", "web3_connected": w3ok, "wallet": WALLET_ADDRESS, "network": NETWORK, "rpc": BASE_RPC_URL, "block": block}
 
 
+@app.get("/openapi.json")
+async def openapi_spec():
+    return {
+        "openapi": "3.1.0",
+        "info": {
+            "title": "Kristo Travel Intelligence API",
+            "description": "AI-powered travel and crypto intelligence for AI agents. x402 pay-per-call protocol on Base network. 0.25 USDC per call.",
+            "version": "3.1.0",
+            "contact": {"name": "Kristo Intelligence"},
+            "x402": {
+                "pricing": {"amount": "250000", "token": USDC_CONTRACT, "chainId": 8453, "recipient": WALLET_ADDRESS},
+                "protocol": "x402-pay-per-call"
+            }
+        },
+        "servers": [{"url": "https://kristo-travel-api.onrender.com", "description": "Production (Render)"}],
+        "paths": {
+            "/travel/destination-score": {
+                "get": {
+                    "summary": "Destination Intelligence Score",
+                    "description": "Risk/reward/budget score for 10 travel destinations with insider tips, safety ratings, and cost breakdowns.",
+                    "operationId": "getDestinationScore",
+                    "parameters": [{"name": "city", "in": "query", "required": False, "description": "City name (e.g. Rome, Tokyo, Bangkok). If omitted, returns list of all 10 available cities.", "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "Destination intelligence data"}, "402": {"description": "Payment required (x402 protocol)", "headers": {"X-PAYMENT-REQUIRED": {"schema": {"type": "string"}}}}}
+                }
+            },
+            "/travel/flight-intel": {
+                "get": {
+                    "summary": "Flight Intelligence",
+                    "description": "Flight price patterns, optimal booking windows, seasonal discounts, and route analysis for 3 global regions.",
+                    "operationId": "getFlightIntel",
+                    "parameters": [{"name": "region", "in": "query", "required": False, "description": "Region name (e.g. europe, asia, americas). If omitted, returns summary of all regions.", "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "Flight intelligence data"}, "402": {"description": "Payment required (x402 protocol)"}}
+                }
+            },
+            "/travel/hotel-rates": {
+                "get": {
+                    "summary": "Hotel Rate Intelligence",
+                    "description": "Hotel rates across budget/mid/luxury tiers for 10 cities. Includes cheapest and most expensive picks.",
+                    "operationId": "getHotelRates",
+                    "parameters": [],
+                    "responses": {"200": {"description": "Hotel rate data for all cities"}, "402": {"description": "Payment required (x402 protocol)"}}
+                }
+            },
+            "/crypto/wallet-profile": {
+                "get": {
+                    "summary": "Crypto Wallet Profile",
+                    "description": "Real-time on-chain wallet analysis on Base network. Returns ETH/USDC/WETH balances, transaction activity, risk profile classification.",
+                    "operationId": "getWalletProfile",
+                    "parameters": [{"name": "address", "in": "query", "required": True, "description": "Ethereum/Base wallet address to analyze", "schema": {"type": "string"}}],
+                    "responses": {"200": {"description": "Wallet profile with balances and activity"}, "402": {"description": "Payment required (x402 protocol)"}}
+                }
+            },
+            "/crypto/whale-moves": {
+                "get": {
+                    "summary": "Whale Movement Tracker",
+                    "description": "Large USDC transfers on Base network. Tracks whale movements above configurable threshold. Real on-chain data.",
+                    "operationId": "getWhaleMoves",
+                    "parameters": [{"name": "min_usdc", "in": "query", "required": False, "description": "Minimum USDC amount to qualify as whale move (default: 1000)", "schema": {"type": "number", "default": 1000}}],
+                    "responses": {"200": {"description": "List of whale transfers"}, "402": {"description": "Payment required (x402 protocol)"}}
+                }
+            },
+            "/crypto/gas-oracle": {
+                "get": {
+                    "summary": "Base Gas Oracle",
+                    "description": "Current Base network gas price with cost estimates for ETH transfers, USDC transfers, DEX swaps, and contract calls.",
+                    "operationId": "getGasOracle",
+                    "parameters": [],
+                    "responses": {"200": {"description": "Gas price and transaction cost estimates"}, "402": {"description": "Payment required (x402 protocol)"}}
+                }
+            }
+        },
+        "tags": [
+            {"name": "travel", "description": "Travel intelligence endpoints"},
+            {"name": "crypto", "description": "Crypto on-chain intelligence endpoints"}
+        ]
+    }
+
+
 @app.get("/sales/recent")
+async def sales_recent():
+    return {"total_sales": len(sales_log), "recent": sales_log[-10:]}</arg_value><arg_key>old_str":  "@app.get("/sales/recent")
 async def sales_recent():
     return {"total_sales": len(sales_log), "recent": sales_log[-10:]}
 
