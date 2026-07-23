@@ -1,0 +1,570 @@
+     1→"""
+     2→KRISTO INTELLIGENCE API v3.0
+     3→x402 Pay-per-call — 6 sellable endpoints for AI agents.
+     4→Travel + Crypto data with real on-chain queries.
+     5→
+     6→Етап: Production
+     7→"""
+     8→
+     9→import os
+    10→import json
+    11→import asyncio
+    12→from datetime import datetime, timezone
+    13→from fastapi import FastAPI, Header, Query
+    14→from fastapi.responses import JSONResponse
+    15→from fastapi.middleware.cors import CORSMiddleware
+    16→import uvicorn
+    17→from web3 import Web3
+    18→
+    19→# ==========================================
+    20→# 1. CONFIG
+    21→# ==========================================
+    22→WALLET_ADDRESS = os.getenv("WALLET_ADDRESS", "0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f")
+    23→PRICE_USDC = os.getenv("PRICE_USDC", "0.25")
+    24→NETWORK = "base"
+    25→ASSET = "USDC"
+    26→BASE_RPC_URL = os.getenv("BASE_RPC_URL", "https://mainnet.base.org")
+    27→USDC_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+    28→WETH_CONTRACT = "0x4200000000000000000000000000000000000006"
+    29→TRANSFER_TOPIC = Web3.keccak(text="Transfer(address,address,uint256)").hex()
+    30→
+    31→used_transactions: set = set()
+    32→w3 = Web3(Web3.HTTPProvider(BASE_RPC_URL))
+    33→sales_log: list = []
+    34→
+    35→# ==========================================
+    36→# 2. PRODUCT DATA
+    37→# ==========================================
+    38→DESTINATIONS = {
+    39→    "rome": {
+    40→        "city": "Rome", "country": "Italy", "lat": 41.9028, "lon": 12.4964,
+    41→        "avg_budget_usd": 480, "budget_breakdown": {"hotel": 180, "food": 95, "transport": 55, "attractions": 90, "misc": 60},
+    42→        "risk_score": 22, "risk_factors": ["pickpocketing near tourist sites", "scams at Colosseum area"],
+    43→        "best_months": [4, 5, 9, 10], "worst_months": [7, 8],
+    44→        "hotel_avg_per_night": {"budget": 65, "mid": 140, "luxury": 320},
+    45→        "safety_index": 72, "healthcare_quality": 85, "internet_speed_mbps": 45,
+    46→        "visa_free_nationalities": 163, "airport_code": "FCO",
+    47→        "insider_tips": [
+    48→            "Trastevere restaurants are 30-40% cheaper than Centro Storico for equivalent quality",
+    49→            "Roma Pass 72h saves ~45 EUR on transport + 2 free museum entries",\n            "Book Vatican tickets online 2 weeks ahead — skip-the-line saves 2-3 hours",
+    50→            "Apartment rentals in Monti area offer best value/location ratio"
+    51→        ]
+    52→    },
+    53→    "barcelona": {
+    54→        "city": "Barcelona", "country": "Spain", "lat": 41.3874, "lon": 2.1686,
+    55→        "avg_budget_usd": 420, "budget_breakdown": {"hotel": 150, "food": 80, "transport": 40, "attractions": 85, "misc": 65},
+    56→        "risk_score": 45, "risk_factors": ["high pickpocket risk on La Rambla", "tourist tax scams", "unlicensed street vendors"],
+    57→        "best_months": [5, 6, 9, 10], "worst_months": [7, 8],
+    58→        "hotel_avg_per_night": {"budget": 55, "mid": 120, "luxury": 280},
+    59→        "safety_index": 60, "healthcare_quality": 88, "internet_speed_mbps": 52,
+    60→        "visa_free_nationalities": 165, "airport_code": "BCN",
+    61→        "insider_tips": [
+    62→            "Gracia district has authentic tapas at 40% less than Gothic Quarter",
+    63→            "T-Casual 10-trip card is cheaper than single metro tickets after 5 rides",
+    64→            "Book Sagrada Familia for 9am slot — least crowded and best light for photos",\n            "Beach restaurants in Barceloneta overcharge 50-80% — walk 3 blocks inland"
+    65→        ]
+    66→    },
+    67→    "bangkok": {
+    68→        "city": "Bangkok", "country": "Thailand", "lat": 13.7563, "lon": 100.5018,
+    69→        "avg_budget_usd": 280, "budget_breakdown": {"hotel": 45, "food": 55, "transport": 25, "attractions": 65, "misc": 90},
+    70→        "risk_score": 38, "risk_factors": ["tuktuk scams", "gem scams", "jet ski damage extortion in Pattaya"],
+    71→        "best_months": [11, 12, 1, 2], "worst_months": [4, 5, 9, 10],
+    72→        "hotel_avg_per_night": {"budget": 15, "mid": 50, "luxury": 150},
+    73→        "safety_index": 58, "healthcare_quality": 72, "internet_speed_mbps": 65,
+    74→        "visa_free_nationalities": 98, "airport_code": "BKK",
+    75→        "insider_tips": [
+    76→            "Street food on Yaowarat (Chinatown) is 70% cheaper and often better than restaurant food",
+    77→            "BTS Skytrain day pass unlimited rides for 140 THB — covers all major tourist areas",
+    78→            "Grand Palace: go at 8:30am opening, done by 11am before heat and crowds",
+    79→            " Sukhumvit 20-30 soi area has best boutique hotel value with BTS access"
+    80→        ]
+    81→    },
+    82→    "dubai": {
+    83→        "city": "Dubai", "country": "UAE", "lat": 25.2048, "lon": 55.2708,
+    84→        "avg_budget_usd": 650, "budget_breakdown": {"hotel": 200, "food": 110, "transport": 65, "attractions": 120, "misc": 155},
+    85→        "risk_score": 15, "risk_factors": ["high temperatures Jun-Sep", "tourist price inflation"],
+    86→        "best_months": [11, 12, 1, 2, 3], "worst_months": [6, 7, 8],
+    87→        "hotel_avg_per_night": {"budget": 80, "mid": 200, "luxury": 500},
+    88→        "safety_index": 90, "healthcare_quality": 82, "internet_speed_mbps": 78,
+    89→        "visa_free_nationalities": 112, "airport_code": "DXB",
+    90→        "insider_tips": [
+    91→            "Deira and Bur Dubai have authentic souks at real prices — skip mall souks",
+    92→            "Nol card for metro is essential — taxis cost 5-8x more for same distance",
+    93→            "Friday brunch deals at 5-star hotels offer luxury dining at 60% off a la carte",
+    94→            "Al Seef district heritage area is free and uncrowded vs paid attractions"
+    95→        ]
+    96→    },
+    97→    "tokyo": {
+    98→        "city": "Tokyo", "country": "Japan", "lat": 35.6762, "lon": 139.6503,
+    99→        "avg_budget_usd": 520, "budget_breakdown": {"hotel": 160, "food": 100, "transport": 60, "attractions": 80, "misc": 120},
+   100→        "risk_score": 8, "risk_factors": ["language barrier", "earthquake risk"],
+   101→        "best_months": [3, 4, 10, 11], "worst_months": [6, 7, 8],
+   102→        "hotel_avg_per_night": {"budget": 50, "mid": 130, "luxury": 350},
+   103→        "safety_index": 95, "healthcare_quality": 92, "internet_speed_mbps": 85,
+   104→        "visa_free_nationalities": 71, "airport_code": "NRT",
+   105→        "insider_tips": [
+   106→            "7-Eleven and Lawson ATMs have zero-fee international withdrawals via 7-Bank",
+   107→            "Japan Rail Pass 7-day covers Shinkansen — saves 200+ USD on Tokyo-Osaka-Kyoto round trip",
+   108→            "Lunch sets (teishoku) at 800-1200 JPY offer same restaurant quality as 3000+ JPY dinner",
+   109→            "Stay in Asakusa or Ueno for 40% cheaper hotels with direct metro to all areas"
+   110→        ]
+   111→    },
+   112→    "lisbon": {
+   113→        "city": "Lisbon", "country": "Portugal", "lat": 38.7223, "lon": -9.1393,
+   114→        "avg_budget_usd": 350, "budget_breakdown": {"hotel": 100, "food": 65, "transport": 35, "attractions": 55, "misc": 95},
+   115→        "risk_score": 30, "risk_factors": ["pickpocketing on Tram 28", "hill navigation difficulty"],
+   116→        "best_months": [4, 5, 9, 10], "worst_months": [7, 8],
+   117→        "hotel_avg_per_night": {"budget": 40, "mid": 90, "luxury": 220},
+   118→        "safety_index": 75, "healthcare_quality": 80, "internet_speed_mbps": 55,
+   119→        "visa_free_nationalities": 186, "airport_code": "LIS",
+   120→        "insider_tips": [
+   121→            "Alfama and Mouraria neighborhoods have cheapest authentic restaurants — 50% less than Baixa",
+   122→            "Lisboa Card covers 30+ attractions + transport — pays off after 3 visits",
+   123→            "Take Uber/Bolt to Belem — tram is 3x slower and same price",
+   124→            "Rentals in Arroios or Intendente are emerging areas with 30% lower prices than central"
+   125→        ]
+   126→    },
+   127→    "istanbul": {
+   128→        "city": "Istanbul", "country": "Turkey", "lat": 41.0082, "lon": 28.9784,
+   129→        "avg_budget_usd": 300, "budget_breakdown": {"hotel": 60, "food": 50, "transport": 20, "attractions": 45, "misc": 125},
+   130→        "risk_score": 35, "risk_factors": ["taxi overcharging", "carpet shop scams", "crowds at major sites"],
+   131→        "best_months": [4, 5, 9, 10, 11], "worst_months": [7, 8],
+   132→        "hotel_avg_per_night": {"budget": 25, "mid": 70, "luxury": 200},
+   133→        "safety_index": 62, "healthcare_quality": 70, "internet_speed_mbps": 48,
+   134→        "visa_free_nationalities": 78, "airport_code": "IST",
+   135→        "insider_tips": [
+   136→            "Istanbulkart transit card works for metro, tram, bus, ferry — single ride 15 TL vs 50 TL taxi",
+   137→            "Kadikoy market on Asian side has fresh food at 60% less than European side tourist restaurants",
+   138→            "Museum Pass Istanbul covers 12 museums — saves ~1200 TL vs individual tickets",
+   139→            "Hotels in Beyoglu/Taksim area offer best transport connectivity for sightseeing"
+   140→        ]
+   141→    },
+   142→    "mexico-city": {
+   143→        "city": "Mexico City", "country": "Mexico", "lat": 19.4326, "lon": -99.1332,
+   144→        "avg_budget_usd": 250, "budget_breakdown": {"hotel": 50, "food": 45, "transport": 20, "attractions": 40, "misc": 95},
+   145→        "risk_score": 42, "risk_factors": ["altitude sickness", "taxi safety in some areas", "pickpocketing in metro"],
+   146→        "best_months": [3, 4, 10, 11], "worst_months": [7, 8, 9],
+   147→        "hotel_avg_per_night": {"budget": 20, "mid": 60, "luxury": 180},
+   148→        "safety_index": 52, "healthcare_quality": 65, "internet_speed_mbps": 38,
+   149→        "visa_free_nationalities": 120, "airport_code": "MEX",
+   150→        "insider_tips": [
+   151→            "Street tacos at 15-25 MXN (~1 USD) are the best food value in any major world city",
+   152→            "Metrobus smart card costs 5 MXN per ride — covers most tourist areas",
+   153→            "Uber is safer and cheaper than street taxis — always use it especially at night",
+   154→            "Roma Norte and Condesa neighborhoods are safest for tourists with great food scene"
+   155→        ]
+   156→    },
+   157→    "bali": {
+   158→        "city": "Bali", "country": "Indonesia", "lat": -8.3405, "lon": 115.0920,
+   159→        "avg_budget_usd": 200, "budget_breakdown": {"hotel": 35, "food": 35, "transport": 25, "attractions": 30, "misc": 75},
+   160→        "risk_score": 33, "risk_factors": ["motorbike accident risk", "monkey temple scams", "water safety concerns"],
+   161→        "best_months": [4, 5, 6, 9, 10], "worst_months": [1, 2, 12],
+   162→        "hotel_avg_per_night": {"budget": 12, "mid": 45, "luxury": 150},
+   163→        "safety_index": 64, "healthcare_quality": 55, "internet_speed_mbps": 22,
+   164→        "visa_free_nationalities": 82, "airport_code": "DPS",
+   165→        "insider_tips": [
+   166→            "Ubud rice terrace area has 50% cheaper accommodation vs Seminyak with better nature access",
+   167→            "Gojek/Grab apps for transport are 70% cheaper than taxis and safer negotiated price",
+   168→            "Warungs (local eateries) serve full meals for 20-40k IDR vs 150k+ at tourist restaurants",
+   169→            "Canggu for digital nomads, Ubud for wellness, Uluwatu for surfing — pick one base not all three"
+   170→        ]
+   171→    },
+   172→    "prague": {
+   173→        "city": "Prague", "country": "Czech Republic", "lat": 50.0755, "lon": 14.4378,
+   174→        "avg_budget_usd": 320, "budget_breakdown": {"hotel": 90, "food": 55, "transport": 30, "attractions": 60, "misc": 85},
+   175→        "risk_score": 18, "risk_factors": ["currency exchange scams", "overpriced tourist restaurants on Old Town Square"],
+   176→        "best_months": [4, 5, 9, 10], "worst_months": [7, 8],
+   177→        "hotel_avg_per_night": {"budget": 35, "mid": 85, "luxury": 200},
+   178→        "safety_index": 82, "healthcare_quality": 78, "internet_speed_mbps": 58,
+   179→        "visa_free_nationalities": 188, "airport_code": "PRG",
+   180→        "insider_tips": [
+   181→            "Trdelnik (chimney cake) on Old Town Square is 3x more expensive — buy from local bakeries",
+   182→            "Prague Card covers 70+ attractions, transport, and tours — breakeven at 4-5 sites",
+   183→            "Zizkov and Vinohrady neighborhoods have authentic Czech pubs at 40% less than tourist center",
+   184→            "Walk across Charles Bridge at 6am for empty photos — by 9am it is packed with tourists"
+   185→        ]
+   186→    }
+   187→}
+   188→
+   189→FLIGHT_INTEL = {
+   190→    "europe_to_asia": {
+   191→        "avg_price_range_usd": {"economy": [480, 1200], "premium_economy": [1200, 2500], "business": [3000, 8000]},
+   192→        "best_booking_window_days": [45, 75],
+   193→        "cheapest_days": ["Tuesday", "Wednesday"],
+   194→        "expensive_days": ["Friday", "Sunday"],
+   195→        "price_drop_months": ["January", "February", "September", "October"],
+   196→        "price_spike_months": ["June", "July", "December"],
+   197→        "top_routes": [
+   198→            {"from": "London", "to": "Bangkok", "avg_price": 620, "best_airline": "Qatar Airways", "layover_city": "Doha"},
+   199→            {"from": "London", "to": "Tokyo", "avg_price": 750, "best_airline": "Finnair", "layover_city": "Helsinki"},
+   200→            {"from": "Frankfurt", "to": "Bangkok", "avg_price": 580, "best_airline": "Emirates", "layover_city": "Dubai"},
+   201→            {"from": "Paris", "to": "Tokyo", "avg_price": 780, "best_airline": "ANA", "layover_city": "Tokyo"},
+   202→            {"from": "Istanbul", "to": "Tokyo", "avg_price": 650, "best_airline": "Turkish Airlines", "layover_city": "Istanbul"}
+   203→        ],
+   204→        "seasonal_patterns": {
+   205→            "Q1": {"demand": "low", "avg_discount_pct": 18, "tip": "Best time for Southeast Asia deals"},
+   206→            "Q2": {"demand": "medium", "avg_discount_pct": 8, "tip": "Book 60+ days ahead for summer travel"},
+   207→            "Q3": {"demand": "high", "avg_discount_pct": -12, "tip": "Prices peak — avoid if flexible"},
+   208→            "Q4": {"demand": "medium", "avg_discount_pct": 10, "tip": "October has shoulder season deals"}
+   209→        }
+   210→    },
+   211→    "europe_to_americas": {
+   212→        "avg_price_range_usd": {"economy": [350, 900], "premium_economy": [900, 2000], "business": [2500, 6000]},
+   213→        "best_booking_window_days": [30, 60],
+   214→        "cheapest_days": ["Tuesday", "Wednesday", "Thursday"],
+   215→        "expensive_days": ["Friday", "Saturday"],
+   216→        "price_drop_months": ["January", "February", "March"],
+   217→        "price_spike_months": ["July", "August", "December"],
+   218→        "top_routes": [
+   219→            {"from": "London", "to": "New York", "avg_price": 420, "best_airline": "Norse Atlantic", "layover_city": "direct"},
+   220→            {"from": "Paris", "to": "Mexico City", "avg_price": 580, "best_airline": "Air France", "layover_city": "Paris"},
+   221→            {"from": "Madrid", "to": "Bogota", "avg_price": 450, "best_airline": "Avianca", "layover_city": "direct"},
+   222→            {"from": "Frankfurt", "to": "Sao Paulo", "avg_price": 620, "best_airline": "Lufthansa", "layover_city": "Frankfurt"},
+   223→            {"from": "Lisbon", "to": "New York", "avg_price": 380, "best_airline": "TAP Portugal", "layover_city": "Lisbon"}
+   224→        ],
+   225→        "seasonal_patterns": {
+   226→            "Q1": {"demand": "low", "avg_discount_pct": 22, "tip": "Cheapest quarter for transatlantic flights"},
+   227→            "Q2": {"demand": "rising", "avg_discount_pct": 10, "tip": "May has good deals before summer surge"},
+   228→            "Q3": {"demand": "high", "avg_discount_pct": -15, "tip": "Summer peak — book 90 days ahead minimum"},
+   229→            "Q4": {"demand": "medium", "avg_discount_pct": 5, "tip": "November pre-holiday window has brief price dips"}
+   230→        }
+   231→    },
+   232→    "inter_europe": {
+   233→        "avg_price_range_usd": {"economy": [40, 250], "premium_economy": [150, 500], "business": [400, 1500]},
+   234→        "best_booking_window_days": [14, 45],
+   235→        "cheapest_days": ["Tuesday", "Wednesday"],
+   236→        "expensive_days": ["Friday", "Sunday", "Monday"],
+   237→        "price_drop_months": ["January", "February", "November"],
+   238→        "price_spike_months": ["August", "December"],
+   239→        "top_routes": [
+   240→            {"from": "London", "to": "Barcelona", "avg_price": 65, "best_airline": "Vueling", "layover_city": "direct"},
+   241→            {"from": "Berlin", "to": "Istanbul", "avg_price": 120, "best_airline": "Pegasus", "layover_city": "direct"},
+   242→            {"from": "Paris", "to": "Rome", "avg_price": 80, "best_airline": "Transavia", "layover_city": "direct"},
+   243→            {"from": "Prague", "to": "Lisbon", "avg_price": 95, "best_airline": "Ryanair", "layover_city": "direct"},
+   244→            {"from": "Sofia", "to": "Dubai", "avg_price": 280, "best_airline": "Wizz Air", "layover_city": "direct"}
+   245→        ],
+   246→        "seasonal_patterns": {
+   247→            "Q1": {"demand": "low", "avg_discount_pct": 25, "tip": "Best time for city hopping — flights under 50 EUR common"},
+   248→            "Q2": {"demand": "medium", "avg_discount_pct": 10, "tip": "May flights still reasonable before July surge"},
+   249→            "Q3": {"demand": "high", "avg_discount_pct": -20, "tip": "Peak summer — book early or fly early morning"},
+   250→            "Q4": {"demand": "medium", "avg_discount_pct": 15, "tip": "November is hidden gem month for European flights"}
+   251→        }
+   252→    }
+   253→}
+   254→
+   255→# ==========================================
+   256→# 3. WEB3 VALIDATION
+   257→# ==========================================
+   258→async def verify_payment(tx_hash: str) -> dict:
+   259→    tx_hash_clean = tx_hash.strip()
+   260→    if tx_hash_clean.startswith("0x"):
+   261→        tx_hash_clean = tx_hash_clean[2:]
+   262→    if len(tx_hash_clean) != 64:
+   263→        return {"valid": False, "error": "Invalid transaction hash format.", "details": {}}
+   264→    tx_hash_full = f"0x{tx_hash_clean}"
+   265→    if tx_hash_full in used_transactions:
+   266→        return {"valid": False, "error": "Transaction already used.", "details": {}}
+   267→    try:
+   268→        loop = asyncio.get_event_loop()
+   269→        tx_receipt = await loop.run_in_executor(None, w3.eth.get_transaction_receipt, tx_hash_full)
+   270→    except Exception as e:
+   271→        return {"valid": False, "error": f"Transaction not found or not confirmed: {str(e)}", "details": {}}
+   272→    if tx_receipt["status"] != 1:
+   273→        return {"valid": False, "error": "Transaction failed (reverted).", "details": {}}
+   274→    wallet_lower = WALLET_ADDRESS.lower()
+   275→    expected_amount_wei = int(float(PRICE_USDC) * 10**6)
+   276→    found_valid_transfer = False
+   277→    transfer_details = {}
+   278→    for log in tx_receipt.get("logs", []):
+   279→        if log["address"].lower() != USDC_CONTRACT.lower():
+   280→            continue
+   281→        if len(log.get("topics", [])) < 3:
+   282→            continue
+   283→        if log["topics"][0].hex() != TRANSFER_TOPIC:
+   284→            continue
+   285→        from_address = "0x" + log["topics"][1].hex()[-40:]
+   286→        to_address = "0x" + log["topics"][2].hex()[-40:]
+   287→        amount = int(log["data"].hex(), 16)
+   288→        if to_address.lower() != wallet_lower:
+   289→            continue
+   290→        if amount == expected_amount_wei:
+   291→            found_valid_transfer = True
+   292→            transfer_details = {
+   293→                "from": from_address, "to": to_address,
+   294→                "amount_raw": amount, "amount_usdc": amount / 10**6,
+   295→                "block": tx_receipt["blockNumber"], "tx_hash": tx_hash_full
+   296→            }
+   297→            break
+   298→    if not found_valid_transfer:
+   299→        return {"valid": False, "error": f"No valid USDC transfer of exactly {PRICE_USDC} USDC found.", "details": {}}
+   300→    return {"valid": True, "error": None, "details": transfer_details}
+   301→
+   302→
+   303→def make_402(description: str) -> tuple:
+   304→    """Helper: return (content_dict, headers_dict) for 402 x402 response."""
+   305→    payload = {
+   306→        "x402_version": 1,
+   307→        "accepts": {
+   308→            "scheme": "exact", "network": NETWORK, "asset": ASSET,
+   309→            "amount": PRICE_USDC, "payTo": WALLET_ADDRESS,
+   310→            "description": description
+   311→        },
+   312→        "error": "Payment required. Send USDC on Base to the payTo address, then retry with X-PAYMENT header containing the tx hash."
+   313→    }
+   314→    return payload, {"X-PAYMENT-REQUIRED": json.dumps(payload)}
+   315→
+   316→
+   317→async def handle_paid_endpoint(endpoint_name: str, description: str, x_payment: str, data_fn):
+   318→    """Generic x402 handler: verify payment -> call data_fn -> return data."""
+   319→    if not x_payment:
+   320→        content, headers = make_402(description)
+   321→        return JSONResponse(status_code=402, content=content, headers=headers)
+   322→    result = await verify_payment(x_payment)
+   323→    if not result["valid"]:
+   324→        content, _ = make_402(description)
+   325→        content["error"] = f"Payment verification failed: {result['error']}"
+   326→        content["invalid_tx"] = x_payment
+   327→        return JSONResponse(status_code=402, content=content, headers={"X-PAYMENT-REQUIRED": json.dumps(content)})
+   328→    used_transactions.add(result["details"]["tx_hash"])
+   329→    sale_entry = {
+   330→        "tx_hash": result["details"]["tx_hash"],
+   331→        "from": result["details"]["from"],
+   332→        "amount": result["details"]["amount_usdc"],
+   333→        "block": result["details"]["block"],
+   334→        "timestamp": datetime.now(timezone.utc).isoformat(),
+   335→        "endpoint": endpoint_name
+   336→    }
+   337→    sales_log.append(sale_entry)
+   338→    print(f"[SALE] {endpoint_name} | TX: {result['details']['tx_hash'][:18]}... | From: {result['details']['from'][:12]}... | Total: {len(sales_log)}")
+   339→    return data_fn()
+   340→
+   341→
+   342→# ==========================================
+   343→# 4. API SERVER
+   344→# ==========================================
+   345→app = FastAPI(title="Kristo Intelligence", description="Pay-per-call API for AI agents. Travel + Crypto. Powered by x402.", version="3.0")
+   346→app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+   347→
+   348→
+   349→@app.get("/")
+   350→async def root():
+   351→    return {
+   352→        "service": "Kristo Intelligence", "model": "pay-per-call (x402)", "version": "3.0",
+   353→        "x402_compatible": True, "web3_validation": "enabled",
+   354→        "pricing": {"amount": PRICE_USDC, "asset": ASSET, "network": NETWORK, "chain_id": 8453, "recipient": WALLET_ADDRESS},
+   355→        "products": 6,
+   356→        "endpoints": [
+   357→            {"path": "/travel/destination-score", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Comprehensive risk/reward/budget score for any of 10 major destinations with insider tips."},
+   358→            {"path": "/travel/flight-intel", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Flight price patterns, best booking windows, top routes, seasonal discounts for 3 route categories."},
+   359→            {"path": "/travel/hotel-rates", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Hotel rate intelligence: budget/mid/luxury tiers across 10 cities with neighborhood tips."},
+   360→            {"path": "/crypto/wallet-profile", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Real-time on-chain wallet analysis: balances, activity score, token profile for any Base address."},
+   361→            {"path": "/crypto/whale-moves", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Large USDC transfers on Base in the last 500 blocks. Real on-chain data."},
+   362→            {"path": "/crypto/gas-oracle", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Current Base gas price, estimated costs for swaps, transfers, and smart contract calls."}
+   363→        ]
+   364→    }
+   365→
+   366→
+   367→@app.get("/health")
+   368→async def health():
+   369→    return {"status": "online", "web3_connected": w3.is_connected(), "wallet": WALLET_ADDRESS, "network": NETWORK, "rpc": BASE_RPC_URL, "block": w3.eth.block_number}
+   370→
+   371→
+   372→@app.get("/sales/recent")
+   373→async def sales_recent():
+   374→    return {"total_sales": len(sales_log), "recent": sales_log[-10:]}
+   375→
+   376→
+   377→# ---------- PAID: TRAVEL ----------
+   378→
+   379→@app.get("/travel/destination-score")
+   380→async def travel_destination_score(city: str = Query(None), x_payment: str = Header(None, alias="X-PAYMENT")):
+   381→    desc = "Destination risk/reward/budget intelligence for 10 global cities"
+   382→    async def get_data():
+   383→        if city:
+   384→            key = city.lower().replace(" ", "-").replace("_", "-")
+   385→            key = key.replace("mexico-city", "mexico-city")  # already correct
+   386→            if key in DESTINATIONS:
+   387→                return {**DESTINATIONS[key], "queried_city": city, "total_cities_available": len(DESTINATIONS)}
+   388→            matches = [k for k, v in DESTINATIONS.items() if city.lower() in v["city"].lower() or city.lower() in v["country"].lower()]
+   389→            if matches:
+   390→                return {**DESTINATIONS[matches[0]], "queried_city": city, "matched": matches[0], "total_cities_available": len(DESTINATIONS)}
+   391→        return {"available_cities": list(DESTINATIONS.keys()), "total": len(DESTINATIONS), "note": "Pass ?city=Rome to get specific data"}
+   392→    return await handle_paid_endpoint("/travel/destination-score", desc, x_payment, get_data)
+   393→
+   394→
+   395→@app.get("/travel/flight-intel")
+   396→async def travel_flight_intel(region: str = Query(None), x_payment: str = Header(None, alias="X-PAYMENT")):
+   397→    desc = "Flight price patterns, booking windows, route data, seasonal discounts"
+   398→    async def get_data():
+   399→        if region:
+   400→            key = region.lower().replace(" ", "_")
+   401→            if key in FLIGHT_INTEL:
+   402→                return {**FLIGHT_INTEL[key], "queried_region": region, "available_regions": list(FLIGHT_INTEL.keys())}
+   403→        return {"available_regions": list(FLIGHT_INTEL.keys()), "regions": {k: {"routes": len(v["top_routes"]), "price_range": v["avg_price_range_usd"]} for k, v in FLIGHT_INTEL.items()}}
+   404→    return await handle_paid_endpoint("/travel/flight-intel", desc, x_payment, get_data)
+   405→
+   406→
+   407→@app.get("/travel/hotel-rates")
+   408→async def travel_hotel_rates(x_payment: str = Header(None, alias="X-PAYMENT")):
+   409→    desc = "Hotel rate intelligence across 10 cities with budget tiers and area tips"
+   410→    async def get_data():
+   411→        rates = {}
+   412→        for key, d in DESTINATIONS.items():
+   413→            rates[key] = {
+   414→                "city": d["city"], "country": d["country"],
+   415→                "per_night": d["hotel_avg_per_night"],
+   416→                "avg_total_budget_hotel_pct": round(d["budget_breakdown"]["hotel"] / d["avg_budget_usd"] * 100),
+   417→                "best_value_areas": d["insider_tips"][0] if d["insider_tips"] else None,
+   418→                "internet_mbps": d["internet_speed_mbps"]
+   419→            }
+   420→        cheapest = sorted(rates.values(), key=lambda x: x["per_night"]["budget"])[:3]
+   421→        most_expensive = sorted(rates.values(), key=lambda x: x["per_night"]["luxury"], reverse=True)[:3]
+   422→        return {"cities": rates, "cheapest_budget": cheapest, "most_expensive_luxury": most_expensive, "total_cities": len(rates), "generated_at": datetime.now(timezone.utc).isoformat()}
+   423→    return await handle_paid_endpoint("/travel/hotel-rates", desc, x_payment, get_data)
+   424→
+   425→
+   426→# ---------- PAID: CRYPTO ----------
+   427→
+   428→@app.get("/crypto/wallet-profile")
+   429→async def crypto_wallet_profile(address: str = Query(...), x_payment: str = Header(None, alias="X-PAYMENT")):
+   430→    desc = "Real-time on-chain wallet analysis on Base network"
+   431→    async def get_data():
+   432→        loop = asyncio.get_event_loop()
+   433→        addr = Web3.to_checksum_address(address)
+   434→        # ETH balance
+   435→        eth_balance_wei = await loop.run_in_executor(None, w3.eth.get_balance, addr)
+   436→        eth_balance = float(w3.from_wei(eth_balance_wei, 'ether'))
+   437→        # USDC balance via eth_call
+   438→        balance_selector = '0x70a08231'
+   439→        addr_padded = address.lower().replace("0x", "").zfill(64)
+   440→        try:
+   441→            usdc_raw = await loop.run_in_executor(None, w3.eth.call, {'to': USDC_CONTRACT, 'data': balance_selector + addr_padded})
+   442→            usdc_balance = int(usdc_raw.hex(), 16) / 10**6
+   443→        except Exception:
+   444→            usdc_balance = 0.0
+   445→        # WETH balance
+   446→        try:
+   447→            weth_raw = await loop.run_in_executor(None, w3.eth.call, {'to': WETH_CONTRACT, 'data': balance_selector + addr_padded})
+   448→            weth_balance = float(w3.from_wei(int(weth_raw.hex(), 16), 'ether'))
+   449→        except Exception:
+   450→            weth_balance = 0.0
+   451→        # Recent USDC transfers (last 500 blocks)
+   452→        addr_topic = f"0x{address.lower().replace('0x','').zfill(64)}"
+   453→        try:
+   454→            current_block = w3.eth.block_number
+   455→            logs_out = await loop.run_in_executor(None, w3.eth.get_logs, {
+   456→                'fromBlock': current_block - 500, 'toBlock': 'latest',
+   457→                'address': USDC_CONTRACT, 'topics': [TRANSFER_TOPIC, addr_topic]
+   458→            })
+   459→            logs_in = await loop.run_in_executor(None, w3.eth.get_logs, {
+   460→                'fromBlock': current_block - 500, 'toBlock': 'latest',
+   461→                'address': USDC_CONTRACT, 'topics': [TRANSFER_TOPIC, None, addr_topic]
+   462→            })
+   463→            total_sent = sum(int(l["data"].hex(), 16) for l in logs_out) / 10**6
+   464→            total_received = sum(int(l["data"].hex(), 16) for l in logs_in) / 10**6
+   465→        except Exception:
+   466→            total_sent, total_received, logs_out, logs_in = 0, 0, [], []
+   467→        tx_count = await loop.run_in_executor(None, w3.eth.get_transaction_count, addr)
+   468→        # Profile classification
+   469→        total_volume = total_sent + total_received
+   470→        if total_volume > 100000:
+   471→            profile_type = "whale_institutional"
+   472→        elif total_volume > 10000:
+   473→            profile_type = "high_value_trader"
+   474→        elif total_volume > 1000:
+   475→            profile_type = "active_trader"
+   476→        elif tx_count > 50:
+   477→            profile_type = "active_user"
+   478→        elif eth_balance > 0.01 or usdc_balance > 1:
+   479→            profile_type = "retail_holder"
+   480→        else:
+   481→            profile_type = "minimal_activity"
+   482→        return {
+   483→            "address": address, "profile_type": profile_type,
+   484→            "balances": {"ETH": round(eth_balance, 6), "USDC": round(usdc_balance, 2), "WETH": round(weth_balance, 6)},
+   485→            "activity_500_blocks": {
+   486→                "outgoing_usdc": round(total_sent, 2), "incoming_usdc": round(total_received, 2),
+   487→                "net_flow_usdc": round(total_received - total_sent, 2),
+   488→                "transaction_count": tx_count
+   489→            },
+   490→            "network": "base", "queried_at": datetime.now(timezone.utc).isoformat()
+   491→        }
+   492→    return await handle_paid_endpoint("/crypto/wallet-profile", desc, x_payment, get_data)
+   493→
+   494→
+   495→@app.get("/crypto/whale-moves")
+   496→async def crypto_whale_moves(min_usdc: float = Query(1000), x_payment: str = Header(None, alias="X-PAYMENT")):
+   497→    desc = "Large USDC transfers on Base (whale tracking)"
+   498→    async def get_data():
+   499→        loop = asyncio.get_event_loop()
+   500→        current_block = w3.eth.block_number
+   501→        min_wei = int(min_usdc * 10**6)
+   502→        logs = await loop.run_in_executor(None, w3.eth.get_logs, {
+   503→            'fromBlock': current_block - 500, 'toBlock': 'latest',
+   504→            'address': USDC_CONTRACT, 'topics': [TRANSFER_TOPIC]
+   505→        })
+   506→        whales = []
+   507→        for log in logs:
+   508→            amount = int(log["data"].hex(), 16)
+   509→            if amount >= min_wei:
+   510→                whales.append({
+   511→                    "tx_hash": log["transactionHash"].hex(),
+   512→                    "from": "0x" + log["topics"][1].hex()[-40:],
+   513→                    "to": "0x" + log["topics"][2].hex()[-40:],
+   514→                    "amount_usdc": round(amount / 10**6, 2),
+   515→                    "block": log["blockNumber"]
+   516→                })
+   517→        whales.sort(key=lambda x: x["amount_usdc"], reverse=True)
+   518→        total_moved = sum(w["amount_usdc"] for w in whales)
+   519→        return {
+   520→            "whale_transfers": whales[:50],
+   521→            "total_transfers_found": len(whales),
+   522→            "total_usdc_moved": round(total_moved, 2),
+   523→            "min_threshold_usdc": min_usdc,
+   524→            "blocks_scanned": 500,
+   525→            "latest_block": current_block,
+   526→            "queried_at": datetime.now(timezone.utc).isoformat()
+   527→        }
+   528→    return await handle_paid_endpoint("/crypto/whale-moves", desc, x_payment, get_data)
+   529→
+   530→
+   531→@app.get("/crypto/gas-oracle")
+   532→async def crypto_gas_oracle(x_payment: str = Header(None, alias="X-PAYMENT")):
+   533→    desc = "Current Base gas price and transaction cost estimates"
+   534→    async def get_data():
+   535→        loop = asyncio.get_event_loop()
+   536→        gas_price = await loop.run_in_executor(None, w3.eth.gas_price)
+   537→        gas_gwei = float(w3.from_wei(gas_price, 'gwei'))
+   538→        block = w3.eth.block_number
+   539→        return {
+   540→            "network": "base",
+   541→            "gas_price_gwei": round(gas_gwei, 4),
+   542→            "estimated_costs_usd": {
+   543→                "eth_transfer": {"gas_limit": 21000, "gas_cost_gwei": round(21000 * gas_gwei, 2), "note": "Simple ETH send"},
+   544→                "usdc_transfer": {"gas_limit": 65000, "gas_cost_gwei": round(65000 * gas_gwei, 2), "note": "ERC-20 USDC transfer"},
+   545→                "dex_swap": {"gas_limit": 180000, "gas_cost_gwei": round(180000 * gas_gwei, 2), "note": "Uniswap V3 swap"},
+   546→                "uniswap_v3_swap": {"gas_limit": 200000, "gas_cost_gwei": round(200000 * gas_gwei, 2), "note": "Complex route swap"}
+   547→            },
+   548→            "block_number": block,
+   549→            "recommendation": "low" if gas_gwei < 0.05 else ("medium" if gas_gwei < 0.2 else "high"),
+   550→            "queried_at": datetime.now(timezone.utc).isoformat()
+   551→        }
+   552→    return await handle_paid_endpoint("/crypto/gas-oracle", desc, x_payment, get_data)
+   553→
+   554→
+   555→# ==========================================
+   556→# 5. START
+   557→# ==========================================
+   558→if __name__ == "__main__":
+   559→    print("=" * 55)
+   560→    print(" KRISTO INTELLIGENCE API v3.0 ")
+   561→    print(f" {len(DESTINATIONS)} destinations | 3 flight regions | 3 crypto tools ")
+   562→    print("=" * 55)
+   563→    print(f" * Wallet:   {WALLET_ADDRESS}")
+   564→    print(f" * Price:    {PRICE_USDC} {ASSET} ({NETWORK})")
+   565→    print(f" * Web3 OK:  {w3.is_connected()}")
+   566→    print(f" * Block:    {w3.eth.block_number}")
+   567→    print(f" * Server:   http://0.0.0.0:8000")
+   568→    print("=" * 55)
+   569→    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+   570→
