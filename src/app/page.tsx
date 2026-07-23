@@ -8,7 +8,8 @@ import {
   Activity, CircleDollarSign, Globe, RefreshCw, Clock, Wallet,
   Zap, Server, AlertTriangle, TrendingUp, ExternalLink,
   Bell, BellOff, Radio, Eye, Wifi, WifiOff, Timer,
-  Copy, Check, ArrowRight, Send, Loader2, CreditCard, ShieldCheck
+  Copy, Check, ArrowRight, Send, Loader2, CreditCard, ShieldCheck,
+  Plane, Building2, BarChart3, Wallet as WalletIcon, Fish, Fuel
 } from 'lucide-react'
 
 interface HealthData {
@@ -107,6 +108,13 @@ export default function Home() {
   const [travelData, setTravelData] = useState<any>(null)
   const [paymentError, setPaymentError] = useState<string>('')
   const [copied, setCopied] = useState(false)
+
+  // Register service worker for PWA
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {})
+    }
+  }, [])
 
   // Request notification permission
   useEffect(() => {
@@ -892,6 +900,40 @@ export default function Home() {
             </CardContent>
           </Card>
         )}
+
+        {/* Available Endpoints */}
+        <Card className="border-zinc-800 bg-zinc-900/60">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="w-4 h-4 text-amber-400" />
+              Продаваеми endpoints (6)
+              <Badge variant="outline" className="border-amber-500/40 text-amber-400 text-[10px] ml-auto">
+                $0.25 USDC/всеки
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {[
+              { path: '/travel/destination-score', icon: Plane, label: 'Destination Score', desc: 'Оценка на 10 града — бюджет, риск, сезонност', color: 'text-sky-400' },
+              { path: '/travel/flight-intel', icon: Plane, label: 'Flight Intel', desc: 'Цени на полети от 3 региона (EU/Asia/US)', color: 'text-emerald-400' },
+              { path: '/travel/hotel-rates', icon: Building2, label: 'Hotel Rates', desc: 'Хотели в 10 града — бюджет/среден/лукс', color: 'text-violet-400' },
+              { path: '/crypto/wallet-profile', icon: WalletIcon, label: 'Wallet Profile', desc: 'On-chain анализ на портфейл в Base', color: 'text-amber-400' },
+              { path: '/crypto/whale-moves', icon: Fish, label: 'Whale Moves', desc: 'Големи USDC трансфери (>1000 USDC)', color: 'text-red-400' },
+              { path: '/crypto/gas-oracle', icon: Fuel, label: 'Gas Oracle', desc: 'Live gas цена на Base мрежата', color: 'text-cyan-400' },
+            ].map((ep) => (
+              <div key={ep.path} className="flex items-center gap-3 bg-zinc-950/60 rounded-lg p-3">
+                <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
+                  <ep.icon className={`w-4 h-4 ${ep.color}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-zinc-200 truncate">{ep.label}</p>
+                  <p className="text-[10px] text-zinc-500 truncate">{ep.desc}</p>
+                </div>
+                <p className="text-[10px] font-mono text-zinc-600 shrink-0">GET</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
 
         {/* Quick Info */}
         <div className="grid grid-cols-3 gap-3">

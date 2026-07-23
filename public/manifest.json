@@ -1,13 +1,32 @@
 {
-  "name": "Kristo Intelligence",
+  "name": "Kristo Travel Intelligence",
   "short_name": "Kristo",
-  "description": "x402 Pay-per-call API Dashboard",
+  "description": "x402 Pay-per-call API Dashboard — Travel & Crypto Data",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#09090b",
   "theme_color": "#09090b",
   "orientation": "portrait",
+  "scope": "/",
   "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/logo.svg",
       "sizes": "any",
