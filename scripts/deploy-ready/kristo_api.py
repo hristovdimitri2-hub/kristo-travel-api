@@ -46,7 +46,8 @@ DESTINATIONS = {
         "visa_free_nationalities": 163, "airport_code": "FCO",
         "insider_tips": [
             "Trastevere restaurants are 30-40% cheaper than Centro Storico for equivalent quality",
-            "Roma Pass 72h saves ~45 EUR on transport + 2 free museum entries",\n            "Book Vatican tickets online 2 weeks ahead — skip-the-line saves 2-3 hours",
+            "Roma Pass 72h saves ~45 EUR on transport + 2 free museum entries",
+            "Book Vatican tickets online 2 weeks ahead — skip-the-line saves 2-3 hours",
             "Apartment rentals in Monti area offer best value/location ratio"
         ]
     },
@@ -61,7 +62,8 @@ DESTINATIONS = {
         "insider_tips": [
             "Gracia district has authentic tapas at 40% less than Gothic Quarter",
             "T-Casual 10-trip card is cheaper than single metro tickets after 5 rides",
-            "Book Sagrada Familia for 9am slot — least crowded and best light for photos",\n            "Beach restaurants in Barceloneta overcharge 50-80% — walk 3 blocks inland"
+            "Book Sagrada Familia for 9am slot — least crowded and best light for photos",
+            "Beach restaurants in Barceloneta overcharge 50-80% — walk 3 blocks inland"
         ]
     },
     "bangkok": {
