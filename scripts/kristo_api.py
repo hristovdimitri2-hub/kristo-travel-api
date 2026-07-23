@@ -13,10 +13,13 @@ x402 Pay-per-call API с реална Web3 валидация на плащан�
 
 import os
 import time
+import json
 import asyncio
+import hashlib
 from datetime import datetime, timezone
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import httpx
 from web3 import Web3
@@ -202,18 +205,49 @@ async def verify_payment(tx_hash: str) -> dict:
 app = FastAPI(
     title="Kristo Travel Intelligence",
     description="Global pay-per-call API for AI agents. Powered by x402.",
-    version="2.0"
+    version="2.1"
 )
+
+# CORS за тест платежни заявки от dashboard
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# x402 Payment Required payload (константен за всички 402 отговори)
+X402_PAYMENT_REQUIRED = json.dumps({
+    "x402_version": 1,
+    "accepts": {
+        "scheme": "exact",
+        "network": NETWORK,
+        "asset": ASSET,
+        "amount": PRICE_USDC,
+        "payTo": WALLET_ADDRESS,
+        "description": "Access to Weekend Getaway Travel Context"
+    },
+    "error": "Payment required. Send USDC on Base to the payTo address, then retry with X-PAYMENT header containing the tx hash."
+})
 
 
 @app.get("/")
 async def root():
-    """Меню за роботите (OpenAPI/Metadata)"""
+    """x402 metadata + OpenAPI за AI агенти."""
     return {
         "service": "Kristo Travel Intelligence",
         "model": "pay-per-call (x402)",
-        "version": "2.0",
+        "version": "2.1",
+        "x402_compatible": True,
         "web3_validation": "enabled",
+        "pricing": {
+            "amount": PRICE_USDC,
+            "asset": ASSET,
+            "network": NETWORK,
+            "chain_id": 8453,
+            "recipient": WALLET_ADDRESS
+        },
         "endpoints": [
             {
                 "path": "/travel/weekend-getaway",
@@ -290,28 +324,27 @@ async def monitor_sales():
         )
 
 
+@app.get("/sales/recent")
+async def sales_recent():
+    """Последни успешни плащания (от вградения sales_log)."""
+    return {
+        "total_sales": len(sales_log),
+        "recent": sales_log[-10:]  # последни 10
+    }
+
+
 @app.get("/travel/weekend-getaway")
 async def get_weekend_getaway(x_payment: str = Header(None, alias="X-PAYMENT")):
     """
-    ПЛАТЕН ENDPOINT с Web3 валидация.
-    1. Ако няма X-PAYMENT хедър -> 402 с x402 инструкции.
-    2. Ако има X-PAYMENT (tx hash) -> Проверяваме на блокчейна.
+    x402 ПЛАТЕН ENDPOINT с Web3 валидация.
+    1. Без X-PAYMENT хедър -> 402 + X-PAYMENT-REQUIRED header (x402 standard)
+    2. С X-PAYMENT (tx hash) -> Проверка на блокчейна -> 200 с данните
     """
     if not x_payment:
         return JSONResponse(
             status_code=402,
-            content={
-                "x402_version": 1,
-                "accepts": {
-                    "scheme": "exact",
-                    "network": NETWORK,
-                    "asset": ASSET,
-                    "amount": PRICE_USDC,
-                    "payTo": WALLET_ADDRESS,
-                    "description": "Access to Weekend Getaway Travel Context"
-                },
-                "error": "Payment required. Transfer exactly 0.25 USDC to the provided address on Base network."
-            }
+            content=json.loads(X402_PAYMENT_REQUIRED),
+            headers={"X-PAYMENT-REQUIRED": X402_PAYMENT_REQUIRED}
         )
     
     # Web3 валидация на транзакцията
@@ -319,28 +352,32 @@ async def get_weekend_getaway(x_payment: str = Header(None, alias="X-PAYMENT")):
     
     if not result["valid"]:
         print(f"[ОТХВЪРЛЕНО] Невалидно плащане: {result['error']} | TX: {x_payment}")
+        err_payload = json.loads(X402_PAYMENT_REQUIRED)
+        err_payload["error"] = f"Payment verification failed: {result['error']}"
+        err_payload["invalid_tx"] = x_payment
         return JSONResponse(
             status_code=402,
-            content={
-                "x402_version": 1,
-                "accepts": {
-                    "scheme": "exact",
-                    "network": NETWORK,
-                    "asset": ASSET,
-                    "amount": PRICE_USDC,
-                    "payTo": WALLET_ADDRESS,
-                    "description": "Access to Weekend Getaway Travel Context"
-                },
-                "error": f"Payment verification failed: {result['error']}",
-                "invalid_tx": x_payment
-            }
+            content=err_payload,
+            headers={"X-PAYMENT-REQUIRED": json.dumps(err_payload)}
         )
     
-    # Успешна валидация — маркираме транзакцията като използвана
+    # Успешна валидация
     used_transactions.add(result["details"]["tx_hash"])
     
-    print(f"[УСПЕХ] Плащане потвърдено! TX: {result['details']['tx_hash']}")
+    # Запис в sales_log
+    sale_entry = {
+        "tx_hash": result["details"]["tx_hash"],
+        "from": result["details"]["from"],
+        "amount": result["details"]["amount_usdc"],
+        "block": result["details"]["block"],
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "endpoint": "/travel/weekend-getaway"
+    }
+    sales_log.append(sale_entry)
+    
+    print(f"[УСПЕХ] ПЛАЩАНЕ ПОТВЪРДЕНО! TX: {result['details']['tx_hash']}")
     print(f"         От: {result['details']['from']} | Сума: {result['details']['amount_usdc']} USDC")
+    print(f"         Общо продажби: {len(sales_log)}")
     
     return TRAVEL_CONTEXT
 
