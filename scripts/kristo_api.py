@@ -14,6 +14,7 @@ x402 Pay-per-call API с реална Web3 валидация на плащан�
 import os
 import time
 import asyncio
+from datetime import datetime, timezone
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse
 import uvicorn
@@ -235,6 +236,58 @@ async def health():
         "network": NETWORK,
         "rpc": BASE_RPC_URL
     }
+
+
+# In-memory sales log (production: use Redis/database)
+sales_log: list = []
+
+
+@app.get("/monitor/sales")
+async def monitor_sales():
+    """Проверка за нови USDC плащания към портфейла (последни 24 часа)."""
+    try:
+        # Query USDC Transfer events TO wallet in last ~7200 blocks
+        wallet_padded = WALLET_ADDRESS.lower().replace("0x", "").zfill(64)
+        
+        current_block = w3.eth.block_number
+        from_block = current_block - 7200  # ~24h at 12s/block
+        
+        logs = w3.eth.get_logs({
+            'fromBlock': from_block,
+            'toBlock': 'latest',
+            'address': USDC_CONTRACT_ADDRESS,
+            'topics': [
+                TRANSFER_TOPIC,
+                None,
+                f"0x{wallet_padded}"
+            ]
+        })
+        
+        transfers = []
+        for log in logs:
+            from_addr = "0x" + log["topics"][1].hex()[-40:]
+            amount = int(log["data"].hex(), 16) / 10**6
+            transfers.append({
+                "hash": log["transactionHash"].hex(),
+                "from": from_addr,
+                "value": f"{amount:.2f}",
+                "block": log["blockNumber"]
+            })
+        
+        total_usdc = sum(float(t["value"]) for t in transfers)
+        
+        return {
+            "sales_24h": len(transfers),
+            "total_usdc": f"{total_usdc:.2f}",
+            "transactions": transfers,
+            "wallet": WALLET_ADDRESS,
+            "checked_at": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        return JSONResponse(
+            status_code=503,
+            content={"error": f"Blockchain query failed: {str(e)}"}
+        )
 
 
 @app.get("/travel/weekend-getaway")
