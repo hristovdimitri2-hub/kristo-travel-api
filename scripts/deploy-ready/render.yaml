@@ -2,6 +2,7 @@ services:
   - type: web
     name: kristo-travel-api
     runtime: python
+    rootDir: scripts/deploy-ready
     buildCommand: pip install --no-cache-dir -r requirements.txt
     startCommand: uvicorn kristo_api:app --host 0.0.0.0 --port $PORT
     envVars:
