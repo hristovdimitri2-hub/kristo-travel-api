@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://github.com/rplryan/x402-payment-harness",
+    "name": "rplryan/x402-payment-harness",
+    "snippet": "Use this harness as your client to test every payment edge case — invalid signatures, expired nonces, wrong amounts — without building a custom test client.\nEOA-based test harness for x402 micropayments. Sign and send EIP-712 TransferWithAuthorization payments from a local private key — no CDP dependencies, no wallet API, no cloud signing.",
+    "host_name": "github.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.x402.org/getting-started/quickstart-for-sellers",
+    "name": "Quickstart for Sellers",
+    "snippet": "This guide walks you through integrating with x402 to enable payments for your API or service. with testnet configuration for safe testing . Python and pip ...",
+    "host_name": "docs.x402.org",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=Dg5IplJ1mng",
+    "name": "x402 Explained | Build a Payment-gated API Using Stablecoins",
+    "snippet": "Learn how x402 works and build your own x402 payment -gated API using Next.js and Thirdweb's x402 facilitator to accept USDC payments over HTTP.",
+    "host_name": "www.youtube.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://openlibx402.github.io/docs",
+    "name": "OpenLibx402 Docs",
+    "snippet": "OpenLibx402 is a library ecosystem that implements the X402 protocol. Testing Guide - Testing strategies and mock processors ) ✅ Testing guides and production ...",
+    "host_name": "openlibx402.github.io",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.xpay.sh/x402-sdks",
+    "name": "x402 SDKs & Libraries Hub - xpay",
+    "snippet": "Our SDKs provide developers with type-safe, well-documented, and battle- tested tools for implementing x402 payments with minimal friction. Key Statistics.\nDiscover official and community-maintained SDKs for seamless x402 payment integration. Browse libraries, compare features, and find the perfect tools for your development stack.",
+    "host_name": "www.xpay.sh",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]

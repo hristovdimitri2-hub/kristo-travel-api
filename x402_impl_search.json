@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://docs.x402.org/faq",
+    "name": "FAQ",
+    "snippet": "Why not just use API keys? API key registration requires multi-step UI flows to set up accounts, add payment methods, and plug API keys into your agent. Read more",
+    "host_name": "docs.x402.org",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/xpaysh/awesome-x402/blob/main/README.md",
+    "name": "awesome-x402/README.md at main",
+    "snippet": "MIT, Python 3.10+, 3 passing tests. Client Libraries. x402 Payment Harness - Python library + CLI for x402 payments without requiring Coinbase CDP wallet. Read more",
+    "host_name": "github.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://solana.com/developers/guides/getstarted/intro-to-x402",
+    "name": "How to get started with x402 on Solana",
+    "snippet": "Oct 27, 2025 — This guide explains what x402 is and how to build a simple 'HTTP 402 Payment Required' flow on Solana with a minimal server verifier and a ...\nSo in this guide we will show how to implement x402 using a minimal server and client and list all the available 402 SDKs with the current ...",
+    "host_name": "solana.com",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.cdp.coinbase.com/x402/quickstart-for-sellers",
+    "name": "Quickstart for Sellers - Coinbase Developer Documentation",
+    "snippet": "This guide walks you through integrating with x402 to enable payments for your API or service. By the end, your API will be able to charge buyers and AI agents ... Read more",
+    "host_name": "docs.cdp.coinbase.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@gwrx2005/x402-an-ai-native-payment-protocol-for-the-web-419358450936",
+    "name": "x402: An AI-Native Payment Protocol for the Web",
+    "snippet": "The x402 protocol is a new open standard that embeds payment functionality directly into the fabric of the web to support autonomous machine-to ...",
+    "host_name": "medium.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://blog.cloudflare.com/x402",
+    "name": "Launching the x402 Foundation with Coinbase, and",
+    "snippet": "Sep 23, 2025 — Clients and servers capable of interpreting the x402 protocol are able to transact without the need for accounts, subscriptions, or API keys. Read more",
+    "host_name": "blog.cloudflare.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://arxiv.org/html/2604.11430v1",
+    "name": "Hardening x402: PII-Safe Agentic Payments via Pre-",
+    "snippet": "Apr 13, 2026 — We consider a deployment in which a Python -based AI agent uses the official Coinbase x402 client library to issue micropayments autonomously. Read more",
+    "host_name": "arxiv.org",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.x402.org/extensions/overview",
+    "name": "Extensions Overview",
+    "snippet": "Resource Server Extensions. These run on the resource server (the service accepting payments ) and hook into the HTTP payment lifecycle. Read more",
+    "host_name": "docs.x402.org",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.x402.org/getting-started/quickstart-for-sellers",
+    "name": "Quickstart for Sellers - x402",
+    "snippet": "This guide walks you through integrating with x402 to enable payments for your API or service. By the end, your API will be able to charge buyers and AI agents ... Missing: protocol | Show results with: protocol",
+    "host_name": "docs.x402.org",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.stripe.com/payments/machine/x402",
+    "name": "x402 payments - Stripe Documentation",
+    "snippet": "x402 is a protocol for internet payments. When a client requests a paid resource, your server returns an HTTP 402 response with payment details. The client pays ...",
+    "host_name": "docs.stripe.com",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

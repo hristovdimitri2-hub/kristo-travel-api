@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://www.coinbase.com/developer-platform/discover/launches/monetize-apis-on-x402",
+    "name": "APIs That Get Paid: Monetizing the Agentic Internet With x402 - Coinbase",
+    "snippet": "x402 works with any crypto wallet, and using Coinbase Developer Platform and Coinbase Business makes it simple. Set a price per call, accept ... Missing: registry | Show results with: registry",
+    "host_name": "www.coinbase.com",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.coinbase.com/developer-platform/discover/launches/x402",
+    "name": "Introducing x402: a new standard for internet-native payments - Coinbase",
+    "snippet": "Coinbase is launching x402, a payment protocol that enables instant stablecoin payments directly over HTTP. It allows APIs, apps, and AI agents to transact ... Missing: registry | Show results with: registry\nCoinbase is launching x402, a payment protocol that enables instant stablecoin payments directly over HTTP. It allows APIs, apps, and AI agents to transact seamlessly, unlocking a faster, automated internet economy.",
+    "host_name": "www.coinbase.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://x402.org",
+    "name": "x402",
+    "snippet": "x402 enables instant, low-cost payments for digital services. It's designed for API monetization, agentic commerce, paywalled content, and any scenario Missing: call | Show results with: call\nx402 enables instant, low-cost payments for digital services. It’s designed for API monetization, agentic commerce, paywalled content, and any scenario where traditional payment methods are too slow or expensive.",
+    "host_name": "x402.org",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.cdp.coinbase.com/x402/welcome",
+    "name": "Overview - Coinbase Developer Documentation",
+    "snippet": "x402 is a new open payment protocol developed by Coinbase that enables instant, automatic stablecoin payments directly over HTTP. By reviving the HTTP 402 ... Missing: registry | Show results with: registry\nBy reviving the HTTP 402 Payment Required status code, x402 lets services monetize APIs and digital content onchain, allowing clients, both human and machine, to programmatically pay for access without accounts, sessions, or complex authentication.",
+    "host_name": "docs.cdp.coinbase.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.fireblocks.com/blog/how-x402-and-dynamic-enable-internet-native-payments-for-ai-and-apis",
+    "name": "How x402 and Dynamic Enable Internet-Native Payments for AI and",
+    "snippet": "Enter x402, an open payment protocol developed by Coinbase, The buyer calls an API or requests a resource. Silent per call billing allows ...",
+    "host_name": "www.fireblocks.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.theblock.co/learn/391983/what-is-coinbases-x402-protocol",
+    "name": "What is Coinbase's x402 protocol? - The Block",
+    "snippet": "Coinbase's x402 protocol provides a web-native payments framework, custom made for AI agents. Learn about its tech, backers and use cases ... Missing: registry | Show results with: registry",
+    "host_name": "www.theblock.co",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.alchemy.com/blog/how-x402-brings-real-time-crypto-payments-to-the-web",
+    "name": "What Is x402? The Payment Protocol for AI Agents and Onchain APIs",
+    "snippet": "x402 is an open protocol that embeds crypto payments into HTTP, letting AI agents pay for API calls in real time using USDC: coinbase/x402 Missing: registry | Show results with: registry",
+    "host_name": "www.alchemy.com",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://medium.com/@gwrx2005/x402-an-ai-native-payment-protocol-for-the-web-419358450936",
+    "name": "x402: An AI-Native Payment Protocol for the Web - Medium",
+    "snippet": "This project implements a Telegram bot that uses the x402 protocol to accept payments for premium content. It integrates with Coinbase Developer ...",
+    "host_name": "medium.com",
+    "rank": 7,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.dwellir.com/blog/what-is-x402-protocol",
+    "name": "What Is x402? HTTP-Native Payments for AI Agents - Dwellir",
+    "snippet": "In September 2025, Coinbase and Cloudflare launched x402 to finally put 402 to work. The protocol lets services charge for API calls, digital ...",
+    "host_name": "www.dwellir.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://x402.org/wp-content/uploads/sites/10/2026/06/x402-whitepaper.pdf",
+    "name": "x402: The Payment Protocol for Agentic Commerce",
+    "snippet": "The x402 middleware is a lightweight integration that enables pay-per-request API payments. The following section details how developers can configure x402 and how AI agents handle payment-required responses in real time.",
+    "host_name": "x402.org",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]
