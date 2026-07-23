@@ -512,11 +512,7 @@ async def openapi_spec():
 
 @app.get("/sales/recent")
 async def sales_recent():
-    return {"total_sales": len(sales_log), "recent": sales_log[-10:]}</arg_value><arg_key>old_str":  "@app.get("/sales/recent")
-async def sales_recent():
     return {"total_sales": len(sales_log), "recent": sales_log[-10:]}
-
-
 # ---------- PAID: TRAVEL ----------
 
 @app.get("/travel/destination-score")
