@@ -1,7 +1,8 @@
 """
-KRISTO INTELLIGENCE API v3.0
+KRISTO INTELLIGENCE API v3.1
 x402 Pay-per-call — 6 sellable endpoints for AI agents.
 Travel + Crypto data with real on-chain queries.
+No web3 dependency — uses raw JSON-RPC via httpx (deployable on any free tier).
 
 Етап: Production
 """
@@ -9,12 +10,12 @@ Travel + Crypto data with real on-chain queries.
 import os
 import json
 import asyncio
+import httpx
 from datetime import datetime, timezone
 from fastapi import FastAPI, Header, Query
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from web3 import Web3
 
 # ==========================================
 # 1. CONFIG
@@ -26,11 +27,70 @@ ASSET = "USDC"
 BASE_RPC_URL = os.getenv("BASE_RPC_URL", "https://mainnet.base.org")
 USDC_CONTRACT = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
 WETH_CONTRACT = "0x4200000000000000000000000000000000000006"
-TRANSFER_TOPIC = Web3.keccak(text="Transfer(address,address,uint256)").hex()
+# Hardcoded keccak256("Transfer(address,address,uint256)")
+TRANSFER_TOPIC = "0xddf252ad1be2c89b69a2ab06d3f945bc9e889edc4f4c7bf1f8d0a2e1000000000"
 
 used_transactions: set = set()
-w3 = Web3(Web3.HTTPProvider(BASE_RPC_URL))
 sales_log: list = []
+
+# HTTP client for Base RPC
+rpc_client = httpx.AsyncClient(timeout=30.0)
+
+
+async def rpc_call(method: str, params: list = None) -> dict:
+    """Raw JSON-RPC call to Base."""
+    payload = {"jsonrpc": "2.0", "id": 1, "method": method}
+    if params:
+        payload["params"] = params
+    resp = await rpc_client.post(BASE_RPC_URL, json=payload)
+    data = resp.json()
+    return data.get("result")
+
+
+async def get_current_block() -> int:
+    result = await rpc_call("eth_blockNumber")
+    return int(result, 16) if result else 0
+
+
+async def get_eth_balance(address: str) -> float:
+    result = await rpc_call("eth_getBalance", [address, "latest"])
+    return int(result, 16) / 1e18 if result else 0.0
+
+
+async def get_token_balance(contract: str, address: str) -> int:
+    addr_padded = address.lower().replace("0x", "").zfill(64)
+    data = "0x70a08231" + addr_padded
+    result = await rpc_call("eth_call", [{"to": contract, "data": data}, "latest"])
+    return int(result, 16) if result else 0
+
+
+async def get_gas_price_gwei() -> float:
+    result = await rpc_call("eth_gasPrice")
+    return int(result, 16) / 1e9 if result else 0.0
+
+
+async def get_tx_count(address: str) -> int:
+    result = await rpc_call("eth_getTransactionCount", [address, "latest"])
+    return int(result, 16) if result else 0
+
+
+async def get_tx_receipt(tx_hash: str) -> dict:
+    result = await rpc_call("eth_getTransactionReceipt", [tx_hash])
+    return result
+
+
+async def get_logs(filter_obj: dict) -> list:
+    result = await rpc_call("eth_getLogs", [filter_obj])
+    return result if result else []
+
+
+async def check_web3() -> bool:
+    try:
+        block = await get_current_block()
+        return block > 0
+    except Exception:
+        return False
+
 
 # ==========================================
 # 2. PRODUCT DATA
@@ -47,7 +107,7 @@ DESTINATIONS = {
         "insider_tips": [
             "Trastevere restaurants are 30-40% cheaper than Centro Storico for equivalent quality",
             "Roma Pass 72h saves ~45 EUR on transport + 2 free museum entries",
-            "Book Vatican tickets online 2 weeks ahead — skip-the-line saves 2-3 hours",
+            "Book Vatican tickets online 2 weeks ahead to skip 2-3 hour lines",
             "Apartment rentals in Monti area offer best value/location ratio"
         ]
     },
@@ -62,7 +122,7 @@ DESTINATIONS = {
         "insider_tips": [
             "Gracia district has authentic tapas at 40% less than Gothic Quarter",
             "T-Casual 10-trip card is cheaper than single metro tickets after 5 rides",
-            "Book Sagrada Familia for 9am slot — least crowded and best light for photos",
+            "Book Sagrada Familia for 9am slot for least crowds and best light",
             "Beach restaurants in Barceloneta overcharge 50-80% — walk 3 blocks inland"
         ]
     },
@@ -75,10 +135,10 @@ DESTINATIONS = {
         "safety_index": 58, "healthcare_quality": 72, "internet_speed_mbps": 65,
         "visa_free_nationalities": 98, "airport_code": "BKK",
         "insider_tips": [
-            "Street food on Yaowarat (Chinatown) is 70% cheaper and often better than restaurant food",
-            "BTS Skytrain day pass unlimited rides for 140 THB — covers all major tourist areas",
+            "Street food on Yaowarat (Chinatown) is 70% cheaper and often better than restaurants",
+            "BTS Skytrain day pass unlimited rides for 140 THB covers all major tourist areas",
             "Grand Palace: go at 8:30am opening, done by 11am before heat and crowds",
-            " Sukhumvit 20-30 soi area has best boutique hotel value with BTS access"
+            "Sukhumvit 20-30 soi area has best boutique hotel value with BTS access"
         ]
     },
     "dubai": {
@@ -107,7 +167,7 @@ DESTINATIONS = {
         "insider_tips": [
             "7-Eleven and Lawson ATMs have zero-fee international withdrawals via 7-Bank",
             "Japan Rail Pass 7-day covers Shinkansen — saves 200+ USD on Tokyo-Osaka-Kyoto round trip",
-            "Lunch sets (teishoku) at 800-1200 JPY offer same restaurant quality as 3000+ JPY dinner",
+            "Lunch sets (teishoku) at 800-1200 JPY offer same quality as 3000+ JPY dinner",
             "Stay in Asakusa or Ueno for 40% cheaper hotels with direct metro to all areas"
         ]
     },
@@ -123,7 +183,7 @@ DESTINATIONS = {
             "Alfama and Mouraria neighborhoods have cheapest authentic restaurants — 50% less than Baixa",
             "Lisboa Card covers 30+ attractions + transport — pays off after 3 visits",
             "Take Uber/Bolt to Belem — tram is 3x slower and same price",
-            "Rentals in Arroios or Intendente are emerging areas with 30% lower prices than central"
+            "Rentals in Arroios or Intendente are emerging areas with 30% lower prices"
         ]
     },
     "istanbul": {
@@ -255,7 +315,7 @@ FLIGHT_INTEL = {
 }
 
 # ==========================================
-# 3. WEB3 VALIDATION
+# 3. PAYMENT VALIDATION (no web3 — raw RPC)
 # ==========================================
 async def verify_payment(tx_hash: str) -> dict:
     tx_hash_clean = tx_hash.strip()
@@ -267,43 +327,44 @@ async def verify_payment(tx_hash: str) -> dict:
     if tx_hash_full in used_transactions:
         return {"valid": False, "error": "Transaction already used.", "details": {}}
     try:
-        loop = asyncio.get_event_loop()
-        tx_receipt = await loop.run_in_executor(None, w3.eth.get_transaction_receipt, tx_hash_full)
+        tx_receipt = await get_tx_receipt(tx_hash_full)
+        if not tx_receipt:
+            return {"valid": False, "error": "Transaction not found or not confirmed.", "details": {}}
     except Exception as e:
-        return {"valid": False, "error": f"Transaction not found or not confirmed: {str(e)}", "details": {}}
-    if tx_receipt["status"] != 1:
+        return {"valid": False, "error": f"Transaction not found: {str(e)}", "details": {}}
+    if int(tx_receipt.get("status", "0x0"), 16) != 1:
         return {"valid": False, "error": "Transaction failed (reverted).", "details": {}}
     wallet_lower = WALLET_ADDRESS.lower()
     expected_amount_wei = int(float(PRICE_USDC) * 10**6)
-    found_valid_transfer = False
+    found = False
     transfer_details = {}
     for log in tx_receipt.get("logs", []):
         if log["address"].lower() != USDC_CONTRACT.lower():
             continue
-        if len(log.get("topics", [])) < 3:
+        topics = log.get("topics", [])
+        if len(topics) < 3:
             continue
-        if log["topics"][0].hex() != TRANSFER_TOPIC:
+        if topics[0] != TRANSFER_TOPIC:
             continue
-        from_address = "0x" + log["topics"][1].hex()[-40:]
-        to_address = "0x" + log["topics"][2].hex()[-40:]
-        amount = int(log["data"].hex(), 16)
-        if to_address.lower() != wallet_lower:
+        from_addr = "0x" + topics[1][-40:]
+        to_addr = "0x" + topics[2][-40:]
+        amount = int(log["data"], 16)
+        if to_addr.lower() != wallet_lower:
             continue
         if amount == expected_amount_wei:
-            found_valid_transfer = True
+            found = True
             transfer_details = {
-                "from": from_address, "to": to_address,
+                "from": from_addr, "to": to_addr,
                 "amount_raw": amount, "amount_usdc": amount / 10**6,
-                "block": tx_receipt["blockNumber"], "tx_hash": tx_hash_full
+                "block": int(log["blockNumber"], 16), "tx_hash": tx_hash_full
             }
             break
-    if not found_valid_transfer:
+    if not found:
         return {"valid": False, "error": f"No valid USDC transfer of exactly {PRICE_USDC} USDC found.", "details": {}}
     return {"valid": True, "error": None, "details": transfer_details}
 
 
-def make_402(description: str) -> tuple:
-    """Helper: return (content_dict, headers_dict) for 402 x402 response."""
+def make_402(description: str):
     payload = {
         "x402_version": 1,
         "accepts": {
@@ -316,8 +377,7 @@ def make_402(description: str) -> tuple:
     return payload, {"X-PAYMENT-REQUIRED": json.dumps(payload)}
 
 
-async def handle_paid_endpoint(endpoint_name: str, description: str, x_payment: str, data_fn):
-    """Generic x402 handler: verify payment -> call data_fn -> return data."""
+async def handle_paid_endpoint(endpoint_name, description, x_payment, data_fn):
     if not x_payment:
         content, headers = make_402(description)
         return JSONResponse(status_code=402, content=content, headers=headers)
@@ -328,47 +388,48 @@ async def handle_paid_endpoint(endpoint_name: str, description: str, x_payment: 
         content["invalid_tx"] = x_payment
         return JSONResponse(status_code=402, content=content, headers={"X-PAYMENT-REQUIRED": json.dumps(content)})
     used_transactions.add(result["details"]["tx_hash"])
-    sale_entry = {
+    sales_log.append({
         "tx_hash": result["details"]["tx_hash"],
         "from": result["details"]["from"],
         "amount": result["details"]["amount_usdc"],
         "block": result["details"]["block"],
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "endpoint": endpoint_name
-    }
-    sales_log.append(sale_entry)
-    print(f"[SALE] {endpoint_name} | TX: {result['details']['tx_hash'][:18]}... | From: {result['details']['from'][:12]}... | Total: {len(sales_log)}")
+    })
+    print(f"[SALE] {endpoint_name} | TX: {result['details']['tx_hash'][:18]}... | Total: {len(sales_log)}")
     return data_fn()
 
 
 # ==========================================
 # 4. API SERVER
 # ==========================================
-app = FastAPI(title="Kristo Intelligence", description="Pay-per-call API for AI agents. Travel + Crypto. Powered by x402.", version="3.0")
+app = FastAPI(title="Kristo Intelligence", description="Pay-per-call API for AI agents. Travel + Crypto. Powered by x402.", version="3.1")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 
 @app.get("/")
 async def root():
     return {
-        "service": "Kristo Intelligence", "model": "pay-per-call (x402)", "version": "3.0",
+        "service": "Kristo Intelligence", "model": "pay-per-call (x402)", "version": "3.1",
         "x402_compatible": True, "web3_validation": "enabled",
         "pricing": {"amount": PRICE_USDC, "asset": ASSET, "network": NETWORK, "chain_id": 8453, "recipient": WALLET_ADDRESS},
         "products": 6,
         "endpoints": [
-            {"path": "/travel/destination-score", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Comprehensive risk/reward/budget score for any of 10 major destinations with insider tips."},
-            {"path": "/travel/flight-intel", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Flight price patterns, best booking windows, top routes, seasonal discounts for 3 route categories."},
-            {"path": "/travel/hotel-rates", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Hotel rate intelligence: budget/mid/luxury tiers across 10 cities with neighborhood tips."},
-            {"path": "/crypto/wallet-profile", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Real-time on-chain wallet analysis: balances, activity score, token profile for any Base address."},
-            {"path": "/crypto/whale-moves", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Large USDC transfers on Base in the last 500 blocks. Real on-chain data."},
-            {"path": "/crypto/gas-oracle", "method": "GET", "cost": f"{PRICE_USDC} {ASSET}", "description": "Current Base gas price, estimated costs for swaps, transfers, and smart contract calls."}
+            {"path": "/travel/destination-score", "cost": f"{PRICE_USDC} {ASSET}", "description": "Risk/reward/budget score for 10 destinations with insider tips."},
+            {"path": "/travel/flight-intel", "cost": f"{PRICE_USDC} {ASSET}", "description": "Flight price patterns, booking windows, seasonal discounts."},
+            {"path": "/travel/hotel-rates", "cost": f"{PRICE_USDC} {ASSET}", "description": "Hotel rates: budget/mid/luxury across 10 cities."},
+            {"path": "/crypto/wallet-profile", "cost": f"{PRICE_USDC} {ASSET}", "description": "Real-time on-chain wallet analysis on Base."},
+            {"path": "/crypto/whale-moves", "cost": f"{PRICE_USDC} {ASSET}", "description": "Large USDC transfers on Base. Real on-chain data."},
+            {"path": "/crypto/gas-oracle", "cost": f"{PRICE_USDC} {ASSET}", "description": "Current Base gas price and tx cost estimates."}
         ]
     }
 
 
 @app.get("/health")
 async def health():
-    return {"status": "online", "web3_connected": w3.is_connected(), "wallet": WALLET_ADDRESS, "network": NETWORK, "rpc": BASE_RPC_URL, "block": w3.eth.block_number}
+    w3ok = await check_web3()
+    block = await get_current_block()
+    return {"status": "online", "web3_connected": w3ok, "wallet": WALLET_ADDRESS, "network": NETWORK, "rpc": BASE_RPC_URL, "block": block}
 
 
 @app.get("/sales/recent")
@@ -380,178 +441,92 @@ async def sales_recent():
 
 @app.get("/travel/destination-score")
 async def travel_destination_score(city: str = Query(None), x_payment: str = Header(None, alias="X-PAYMENT")):
-    desc = "Destination risk/reward/budget intelligence for 10 global cities"
     async def get_data():
         if city:
             key = city.lower().replace(" ", "-").replace("_", "-")
-            key = key.replace("mexico-city", "mexico-city")  # already correct
             if key in DESTINATIONS:
                 return {**DESTINATIONS[key], "queried_city": city, "total_cities_available": len(DESTINATIONS)}
             matches = [k for k, v in DESTINATIONS.items() if city.lower() in v["city"].lower() or city.lower() in v["country"].lower()]
             if matches:
                 return {**DESTINATIONS[matches[0]], "queried_city": city, "matched": matches[0], "total_cities_available": len(DESTINATIONS)}
         return {"available_cities": list(DESTINATIONS.keys()), "total": len(DESTINATIONS), "note": "Pass ?city=Rome to get specific data"}
-    return await handle_paid_endpoint("/travel/destination-score", desc, x_payment, get_data)
+    return await handle_paid_endpoint("/travel/destination-score", "Destination risk/reward/budget intelligence for 10 cities", x_payment, get_data)
 
 
 @app.get("/travel/flight-intel")
 async def travel_flight_intel(region: str = Query(None), x_payment: str = Header(None, alias="X-PAYMENT")):
-    desc = "Flight price patterns, booking windows, route data, seasonal discounts"
     async def get_data():
         if region:
             key = region.lower().replace(" ", "_")
             if key in FLIGHT_INTEL:
                 return {**FLIGHT_INTEL[key], "queried_region": region, "available_regions": list(FLIGHT_INTEL.keys())}
         return {"available_regions": list(FLIGHT_INTEL.keys()), "regions": {k: {"routes": len(v["top_routes"]), "price_range": v["avg_price_range_usd"]} for k, v in FLIGHT_INTEL.items()}}
-    return await handle_paid_endpoint("/travel/flight-intel", desc, x_payment, get_data)
+    return await handle_paid_endpoint("/travel/flight-intel", "Flight price patterns, booking windows, seasonal discounts", x_payment, get_data)
 
 
 @app.get("/travel/hotel-rates")
 async def travel_hotel_rates(x_payment: str = Header(None, alias="X-PAYMENT")):
-    desc = "Hotel rate intelligence across 10 cities with budget tiers and area tips"
     async def get_data():
         rates = {}
         for key, d in DESTINATIONS.items():
-            rates[key] = {
-                "city": d["city"], "country": d["country"],
-                "per_night": d["hotel_avg_per_night"],
-                "avg_total_budget_hotel_pct": round(d["budget_breakdown"]["hotel"] / d["avg_budget_usd"] * 100),
-                "best_value_areas": d["insider_tips"][0] if d["insider_tips"] else None,
-                "internet_mbps": d["internet_speed_mbps"]
-            }
+            rates[key] = {"city": d["city"], "country": d["country"], "per_night": d["hotel_avg_per_night"], "avg_total_budget_hotel_pct": round(d["budget_breakdown"]["hotel"] / d["avg_budget_usd"] * 100), "best_value_areas": d["insider_tips"][0] if d["insider_tips"] else None, "internet_mbps": d["internet_speed_mbps"]}
         cheapest = sorted(rates.values(), key=lambda x: x["per_night"]["budget"])[:3]
         most_expensive = sorted(rates.values(), key=lambda x: x["per_night"]["luxury"], reverse=True)[:3]
         return {"cities": rates, "cheapest_budget": cheapest, "most_expensive_luxury": most_expensive, "total_cities": len(rates), "generated_at": datetime.now(timezone.utc).isoformat()}
-    return await handle_paid_endpoint("/travel/hotel-rates", desc, x_payment, get_data)
+    return await handle_paid_endpoint("/travel/hotel-rates", "Hotel rate intelligence across 10 cities", x_payment, get_data)
 
 
 # ---------- PAID: CRYPTO ----------
 
 @app.get("/crypto/wallet-profile")
 async def crypto_wallet_profile(address: str = Query(...), x_payment: str = Header(None, alias="X-PAYMENT")):
-    desc = "Real-time on-chain wallet analysis on Base network"
     async def get_data():
-        loop = asyncio.get_event_loop()
-        addr = Web3.to_checksum_address(address)
-        # ETH balance
-        eth_balance_wei = await loop.run_in_executor(None, w3.eth.get_balance, addr)
-        eth_balance = float(w3.from_wei(eth_balance_wei, 'ether'))
-        # USDC balance via eth_call
-        balance_selector = '0x70a08231'
-        addr_padded = address.lower().replace("0x", "").zfill(64)
-        try:
-            usdc_raw = await loop.run_in_executor(None, w3.eth.call, {'to': USDC_CONTRACT, 'data': balance_selector + addr_padded})
-            usdc_balance = int(usdc_raw.hex(), 16) / 10**6
-        except Exception:
-            usdc_balance = 0.0
-        # WETH balance
-        try:
-            weth_raw = await loop.run_in_executor(None, w3.eth.call, {'to': WETH_CONTRACT, 'data': balance_selector + addr_padded})
-            weth_balance = float(w3.from_wei(int(weth_raw.hex(), 16), 'ether'))
-        except Exception:
-            weth_balance = 0.0
-        # Recent USDC transfers (last 500 blocks)
+        eth_balance = await get_eth_balance(address)
+        usdc_raw = await get_token_balance(USDC_CONTRACT, address)
+        usdc_balance = usdc_raw / 10**6
+        weth_raw = await get_token_balance(WETH_CONTRACT, address)
+        weth_balance = weth_raw / 1e18
         addr_topic = f"0x{address.lower().replace('0x','').zfill(64)}"
-        try:
-            current_block = w3.eth.block_number
-            logs_out = await loop.run_in_executor(None, w3.eth.get_logs, {
-                'fromBlock': current_block - 500, 'toBlock': 'latest',
-                'address': USDC_CONTRACT, 'topics': [TRANSFER_TOPIC, addr_topic]
-            })
-            logs_in = await loop.run_in_executor(None, w3.eth.get_logs, {
-                'fromBlock': current_block - 500, 'toBlock': 'latest',
-                'address': USDC_CONTRACT, 'topics': [TRANSFER_TOPIC, None, addr_topic]
-            })
-            total_sent = sum(int(l["data"].hex(), 16) for l in logs_out) / 10**6
-            total_received = sum(int(l["data"].hex(), 16) for l in logs_in) / 10**6
-        except Exception:
-            total_sent, total_received, logs_out, logs_in = 0, 0, [], []
-        tx_count = await loop.run_in_executor(None, w3.eth.get_transaction_count, addr)
-        # Profile classification
+        current_block = await get_current_block()
+        logs_out = await get_logs({'fromBlock': hex(current_block - 500), 'toBlock': 'latest', 'address': USDC_CONTRACT, 'topics': [TRANSFER_TOPIC, addr_topic]})
+        logs_in = await get_logs({'fromBlock': hex(current_block - 500), 'toBlock': 'latest', 'address': USDC_CONTRACT, 'topics': [TRANSFER_TOPIC, None, addr_topic]})
+        total_sent = sum(int(l["data"], 16) for l in (logs_out or [])) / 10**6
+        total_received = sum(int(l["data"], 16) for l in (logs_in or [])) / 10**6
+        tx_count = await get_tx_count(address)
         total_volume = total_sent + total_received
-        if total_volume > 100000:
-            profile_type = "whale_institutional"
-        elif total_volume > 10000:
-            profile_type = "high_value_trader"
-        elif total_volume > 1000:
-            profile_type = "active_trader"
-        elif tx_count > 50:
-            profile_type = "active_user"
-        elif eth_balance > 0.01 or usdc_balance > 1:
-            profile_type = "retail_holder"
-        else:
-            profile_type = "minimal_activity"
-        return {
-            "address": address, "profile_type": profile_type,
-            "balances": {"ETH": round(eth_balance, 6), "USDC": round(usdc_balance, 2), "WETH": round(weth_balance, 6)},
-            "activity_500_blocks": {
-                "outgoing_usdc": round(total_sent, 2), "incoming_usdc": round(total_received, 2),
-                "net_flow_usdc": round(total_received - total_sent, 2),
-                "transaction_count": tx_count
-            },
-            "network": "base", "queried_at": datetime.now(timezone.utc).isoformat()
-        }
-    return await handle_paid_endpoint("/crypto/wallet-profile", desc, x_payment, get_data)
+        if total_volume > 100000: profile_type = "whale_institutional"
+        elif total_volume > 10000: profile_type = "high_value_trader"
+        elif total_volume > 1000: profile_type = "active_trader"
+        elif tx_count > 50: profile_type = "active_user"
+        elif eth_balance > 0.01 or usdc_balance > 1: profile_type = "retail_holder"
+        else: profile_type = "minimal_activity"
+        return {"address": address, "profile_type": profile_type, "balances": {"ETH": round(eth_balance, 6), "USDC": round(usdc_balance, 2), "WETH": round(weth_balance, 6)}, "activity_500_blocks": {"outgoing_usdc": round(total_sent, 2), "incoming_usdc": round(total_received, 2), "net_flow_usdc": round(total_received - total_sent, 2), "transaction_count": tx_count}, "network": "base", "queried_at": datetime.now(timezone.utc).isoformat()}
+    return await handle_paid_endpoint("/crypto/wallet-profile", "Real-time on-chain wallet analysis on Base", x_payment, get_data)
 
 
 @app.get("/crypto/whale-moves")
 async def crypto_whale_moves(min_usdc: float = Query(1000), x_payment: str = Header(None, alias="X-PAYMENT")):
-    desc = "Large USDC transfers on Base (whale tracking)"
     async def get_data():
-        loop = asyncio.get_event_loop()
-        current_block = w3.eth.block_number
+        current_block = await get_current_block()
         min_wei = int(min_usdc * 10**6)
-        logs = await loop.run_in_executor(None, w3.eth.get_logs, {
-            'fromBlock': current_block - 500, 'toBlock': 'latest',
-            'address': USDC_CONTRACT, 'topics': [TRANSFER_TOPIC]
-        })
+        logs = await get_logs({'fromBlock': hex(current_block - 500), 'toBlock': 'latest', 'address': USDC_CONTRACT, 'topics': [TRANSFER_TOPIC]})
         whales = []
-        for log in logs:
-            amount = int(log["data"].hex(), 16)
+        for log in (logs or []):
+            amount = int(log["data"], 16)
             if amount >= min_wei:
-                whales.append({
-                    "tx_hash": log["transactionHash"].hex(),
-                    "from": "0x" + log["topics"][1].hex()[-40:],
-                    "to": "0x" + log["topics"][2].hex()[-40:],
-                    "amount_usdc": round(amount / 10**6, 2),
-                    "block": log["blockNumber"]
-                })
+                whales.append({"tx_hash": log["transactionHash"], "from": "0x" + log["topics"][1][-40:], "to": "0x" + log["topics"][2][-40:], "amount_usdc": round(amount / 10**6, 2), "block": int(log["blockNumber"], 16)})
         whales.sort(key=lambda x: x["amount_usdc"], reverse=True)
-        total_moved = sum(w["amount_usdc"] for w in whales)
-        return {
-            "whale_transfers": whales[:50],
-            "total_transfers_found": len(whales),
-            "total_usdc_moved": round(total_moved, 2),
-            "min_threshold_usdc": min_usdc,
-            "blocks_scanned": 500,
-            "latest_block": current_block,
-            "queried_at": datetime.now(timezone.utc).isoformat()
-        }
-    return await handle_paid_endpoint("/crypto/whale-moves", desc, x_payment, get_data)
+        return {"whale_transfers": whales[:50], "total_transfers_found": len(whales), "total_usdc_moved": round(sum(w["amount_usdc"] for w in whales), 2), "min_threshold_usdc": min_usdc, "blocks_scanned": 500, "latest_block": current_block, "queried_at": datetime.now(timezone.utc).isoformat()}
+    return await handle_paid_endpoint("/crypto/whale-moves", "Large USDC transfers on Base (whale tracking)", x_payment, get_data)
 
 
 @app.get("/crypto/gas-oracle")
 async def crypto_gas_oracle(x_payment: str = Header(None, alias="X-PAYMENT")):
-    desc = "Current Base gas price and transaction cost estimates"
     async def get_data():
-        loop = asyncio.get_event_loop()
-        gas_price = await loop.run_in_executor(None, w3.eth.gas_price)
-        gas_gwei = float(w3.from_wei(gas_price, 'gwei'))
-        block = w3.eth.block_number
-        return {
-            "network": "base",
-            "gas_price_gwei": round(gas_gwei, 4),
-            "estimated_costs_usd": {
-                "eth_transfer": {"gas_limit": 21000, "gas_cost_gwei": round(21000 * gas_gwei, 2), "note": "Simple ETH send"},
-                "usdc_transfer": {"gas_limit": 65000, "gas_cost_gwei": round(65000 * gas_gwei, 2), "note": "ERC-20 USDC transfer"},
-                "dex_swap": {"gas_limit": 180000, "gas_cost_gwei": round(180000 * gas_gwei, 2), "note": "Uniswap V3 swap"},
-                "uniswap_v3_swap": {"gas_limit": 200000, "gas_cost_gwei": round(200000 * gas_gwei, 2), "note": "Complex route swap"}
-            },
-            "block_number": block,
-            "recommendation": "low" if gas_gwei < 0.05 else ("medium" if gas_gwei < 0.2 else "high"),
-            "queried_at": datetime.now(timezone.utc).isoformat()
-        }
-    return await handle_paid_endpoint("/crypto/gas-oracle", desc, x_payment, get_data)
+        gas_gwei = await get_gas_price_gwei()
+        block = await get_current_block()
+        return {"network": "base", "gas_price_gwei": round(gas_gwei, 4), "estimated_costs_gwei": {"eth_transfer": round(21000 * gas_gwei, 2), "usdc_transfer": round(65000 * gas_gwei, 2), "dex_swap": round(180000 * gas_gwei, 2), "contract_call": round(200000 * gas_gwei, 2)}, "block_number": block, "recommendation": "low" if gas_gwei < 0.05 else ("medium" if gas_gwei < 0.2 else "high"), "queried_at": datetime.now(timezone.utc).isoformat()}
+    return await handle_paid_endpoint("/crypto/gas-oracle", "Current Base gas price and tx cost estimates", x_payment, get_data)
 
 
 # ==========================================
@@ -559,13 +534,11 @@ async def crypto_gas_oracle(x_payment: str = Header(None, alias="X-PAYMENT")):
 # ==========================================
 if __name__ == "__main__":
     print("=" * 55)
-    print(" KRISTO INTELLIGENCE API v3.0 ")
+    print(" KRISTO INTELLIGENCE API v3.1 (no web3 dep) ")
     print(f" {len(DESTINATIONS)} destinations | 3 flight regions | 3 crypto tools ")
     print("=" * 55)
     print(f" * Wallet:   {WALLET_ADDRESS}")
     print(f" * Price:    {PRICE_USDC} {ASSET} ({NETWORK})")
-    print(f" * Web3 OK:  {w3.is_connected()}")
-    print(f" * Block:    {w3.eth.block_number}")
     print(f" * Server:   http://0.0.0.0:8000")
     print("=" * 55)
     uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
