@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://relai.fi/market",
+    "name": "x402 API Marketplace - Browse Pay-Per-Call APIs - RelAI",
+    "snippet": "Discover and consume x402 protocol APIs. Pay-per-call marketplace with instant USDC micropayments on Solana, Base, Avalanche, SKALE, Ethereum, and Polygon.\nEvery API below accepts USDC micropayments via the x402 protocol. Pick one, click to try, sign once — instant settlement on Solana, Base, Ethereum, or any ... Missing: list | Show results with: list",
+    "host_name": "relai.fi",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://relai.fi/marketplace",
+    "name": "RelAI Marketplace — Monetize APIs per call on x402",
+    "snippet": "List Provider registers an endpoint, sets a USDC price + a chain. The marketplace handles the 402 → sign → settle → upstream loop in between. you connect a  ...\nList an API in minutes or run an agent against an existing one. No accounts, no signups, no key rotation. Monetize APIs, enable AI agent payments, and accept ... Missing: submit | Show results with: submit",
+    "host_name": "relai.fi",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://relai.fi/x402",
+    "name": "x402 Protocol - Payment Standard for APIs and AI Agents - RelAI",
+    "snippet": "Register your API in the dashboard, set pricing, and RelAI handles the x402 middleware, facilitator integration, and payment settlement.",
+    "host_name": "relai.fi",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://relai.fi/market/1770311427208",
+    "name": "x402 API Marketplace - RelAI",
+    "snippet": "May 2, 2026 — Designed for AI governance, supply chain integrity, industrial telemetry validation, and regulatory audit workflows. 2 available endpoints.",
+    "host_name": "relai.fi",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://relai.fi/market/1775831480208",
+    "name": "x402 API Marketplace - RelAI",
+    "snippet": "RelAI is the leading x402 protocol marketplace . Monetize APIs with instant micropayments on Solana, Base, Avalanche, SKALE, Ethereum, and Polygon.",
+    "host_name": "relai.fi",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]

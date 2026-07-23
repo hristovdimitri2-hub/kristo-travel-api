@@ -1,0 +1,953 @@
+    60→
+    61→function StatusDot({ online }: { online: boolean }) {
+    62→  return (
+    63→    <span className={`inline-block w-2.5 h-2.5 rounded-full ${online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
+    64→  )
+    65→}
+    66→
+    67→function SaleFlash({ children }: { children: React.ReactNode }) {
+    68→  return (
+    69→    <div className="animate-pulse bg-emerald-500/10 rounded-lg p-4 border border-emerald-500/30">
+    70→      {children}
+    71→    </div>
+    72→  )
+    73→}
+    74→
+    75→// Minimal ABI for USDC transfer
+    76→const USDC_ABI = [
+    77→  'function transfer(address to, uint256 amount) returns (bool)',
+    78→  'function balanceOf(address account) view returns (uint256)',
+    79→  'function decimals() view returns (uint8)'
+    80→]
+    81→
+    82→const BASE_CHAIN_ID = '0x2105' // 8453 in hex
+    83→const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+    84→const API_WALLET = '0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f'
+    85→const PRICE_USDC = '0.25'
+    86→
+    87→export default function Home() {
+    88→  const [health, setHealth] = useState<HealthData | null>(null)
+    89→  const [x402response, setX402response] = useState<X402Response | null>(null)
+    90→  const [loading, setLoading] = useState(true)
+    91→  const [testing, setTesting] = useState(false)
+    92→  const [lastCheck, setLastCheck] = useState<string>('-')
+    93→  const [logs, setLogs] = useState<Array<{ time: string; type: 'success' | 'error' | 'info' | 'payment' | 'warning'; message: string }>>([])
+    94→  const [basescan, setBasescan] = useState<BasescanData | null>(null)
+    95→  const [keepalive, setKeepalive] = useState<KeepaliveData | null>(null)
+    96→  const [monitoring, setMonitoring] = useState(true)
+    97→  const [newSaleFlash, setNewSaleFlash] = useState(false)
+    98→  const prevTxCount = useRef(0)
+    99→  const prevTxHashes = useRef<Set<string>>(new Set())
+   100→  const saleSoundRef = useRef(false)
+   101→
+   102→  // Payment test state
+   103→  const [paymentStep, setPaymentStep] = useState<PaymentStep>('idle')
+   104→  const [walletAddress, setWalletAddress] = useState<string | null>(null)
+   105→  const [walletBalance, setWalletBalance] = useState<string | null>(null)
+   106→  const [txHash, setTxHash] = useState<string>('')
+   107→  const [manualTxHash, setManualTxHash] = useState<string>('')
+   108→  const [travelData, setTravelData] = useState<any>(null)
+   109→  const [paymentError, setPaymentError] = useState<string>('')
+   110→  const [copied, setCopied] = useState(false)
+   111→
+   112→  // Register service worker for PWA
+   113→  useEffect(() => {
+   114→    if ('serviceWorker' in navigator) {
+   115→      navigator.serviceWorker.register('/sw.js').catch(() => {})
+   116→    }
+   117→  }, [])
+   118→
+   119→  // Request notification permission
+   120→  useEffect(() => {
+   121→    if ('Notification' in window && Notification.permission === 'default') {
+   122→      Notification.requestPermission()
+   123→    }
+   124→  }, [])
+   125→
+   126→  const playSaleSound = useCallback(() => {
+   127→    if (saleSoundRef.current) return
+   128→    try {
+   129→      const ctx = new AudioContext()
+   130→      const osc = ctx.createOscillator()
+   131→      const gain = ctx.createGain()
+   132→      osc.connect(gain)
+   133→      gain.connect(ctx.destination)
+   134→      osc.frequency.value = 880
+   135→      osc.type = 'sine'
+   136→      gain.gain.value = 0.1
+   137→      osc.start()
+   138→      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5)
+   139→      osc.stop(ctx.currentTime + 0.5)
+   140→      saleSoundRef.current = true
+   141→      setTimeout(() => { saleSoundRef.current = false }, 5000)
+   142→    } catch { /* Audio not available */ }
+   143→  }, [])
+   144→
+   145→  const sendNotification = useCallback((title: string, body: string) => {
+   146→    if ('Notification' in window && Notification.permission === 'granted') {
+   147→      try {
+   148→        new Notification(title, {
+   149→          body,
+   150→          icon: '/logo.svg',
+   151→          badge: '/logo.svg',
+   152→          tag: 'kristo-sale-' + Date.now(),
+   153→        })
+   154→      } catch { /* Notification failed */ }
+   155→    }
+   156→  }, [])
+   157→
+   158→  const addLog = useCallback((type: 'success' | 'error' | 'info' | 'payment' | 'warning', message: string) => {
+   159→    const now = new Date().toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+   160→    setLogs(prev => [{ time: now, type, message }, ...prev].slice(0, 50))
+   161→  }, [])
+   162→
+   163→  const checkHealth = useCallback(async () => {
+   164→    setLoading(true)
+   165→    try {
+   166→      const res = await fetch('/api/kristo?endpoint=/health')
+   167→      const json = await res.json()
+   168→      if (json.status === 200) {
+   169→        setHealth(json.data)
+   170→      } else {
+   171→        setHealth(null)
+   172→        addLog('error', 'API недостъпен — сървърът може да спи')
+   173→      }
+   174→      setLastCheck(new Date().toLocaleTimeString('bg-BG'))
+   175→    } catch {
+   176→      addLog('error', 'Грешка при свързване с API')
+   177→    }
+   178→    setLoading(false)
+   179→  }, [addLog])
+   180→
+   181→  const checkPayments = useCallback(async () => {
+   182→    try {
+   183→      const res = await fetch('/api/basescan')
+   184→      const data: BasescanData = await res.json()
+   185→      
+   186→      const currentHashes = new Set(data.transactions.map(t => t.hash))
+   187→      const newHashes = [...currentHashes].filter(h => !prevTxHashes.current.has(h))
+   188→      
+   189→      if (newHashes.length > 0 && prevTxHashes.current.size > 0) {
+   190→        const newTxs = data.transactions.filter(t => newHashes.includes(t.hash))
+   191→        const totalNew = newTxs.reduce((s, t) => s + parseFloat(t.value), 0)
+   192→        
+   193→        addLog('payment', `НОВА ПРОДАЖБА! +${totalNew.toFixed(2)} USDC от ${newTxs.length} транзакции!`)
+   194→        playSaleSound()
+   195→        sendNotification(
+   196→          `${totalNew.toFixed(2)} USDC Продажба!`,
+   197→          `Нова продажба в Kristo Travel API: +${totalNew.toFixed(2)} USDC`
+   198→        )
+   199→        setNewSaleFlash(true)
+   200→        setTimeout(() => setNewSaleFlash(false), 10000)
+   201→      }
+   202→      
+   203→      if (prevTxCount.current >= 0 && newHashes.length === 0 && data.count_24h > prevTxCount.current && prevTxCount.current > 0) {
+   204→        addLog('payment', `Продажби: ${data.total_usdc} USDC (${data.count_24h} транзакции за 24ч)`)
+   205→      }
+   206→      
+   207→      prevTxCount.current = data.count_24h
+   208→      prevTxHashes.current = currentHashes
+   209→      setBasescan(data)
+   210→
+   211→      if (data.count_24h === 0 && !data.error && prevTxHashes.current.size === 1) {
+   212→        addLog('warning', 'Няма продажби през последните 24 часа')
+   213→      }
+   214→    } catch {
+   215→      // RPC might fail
+   216→    }
+   217→  }, [addLog, playSaleSound, sendNotification])
+   218→
+   219→  const checkKeepalive = useCallback(async () => {
+   220→    try {
+   221→      const res = await fetch('/api/keepalive')
+   222→      const data: KeepaliveData = await res.json()
+   223→      setKeepalive(data)
+   224→      if (data.render_status === 'online') {
+   225→        addLog('info', 'Render API е буден (auto-ping)')
+   226→      } else if (data.render_status === 'unreachable') {
+   227→        addLog('warning', 'Render API не отговаря — събуждане...')
+   228→      }
+   229→    } catch {
+   230→      // ignore
+   231→    }
+   232→  }, [addLog])
+   233→
+   234→  const testPayment = useCallback(async () => {
+   235→    setTesting(true)
+   236→    addLog('info', 'Тестване на x402 платежен endpoint...')
+   237→    try {
+   238→      const res = await fetch('/api/kristo?endpoint=/travel/weekend-getaway')
+   239→      const json = await res.json()
+   240→      if (json.data?.x402_version) {
+   241→        setX402response(json.data)
+   242→        addLog('success', 'x402 връща 402 — чака плащане от 0.25 USDC')
+   243→      } else if (json.data?.product) {
+   244→        addLog('payment', 'ПЛАЩАНЕ ПОТВЪРДЕНО! Данните са доставени.')
+   245→      } else {
+   246→        addLog('error', 'Неочакван отговор от API-то')
+   247→      }
+   248→    } catch {
+   249→      addLog('error', 'Грешка при тестване')
+   250→    }
+   251→    setTesting(false)
+   252→  }, [addLog])
+   253→
+   254→  // ===== WALLET PAYMENT FLOW =====
+   255→  const hasWallet = typeof window !== 'undefined' && !!(window as any).ethereum
+   256→
+   257→  const connectWallet = useCallback(async () => {
+   258→    setPaymentStep('connecting')
+   259→    setPaymentError('')
+   260→    try {
+   261→      const ethereum = (window as any).ethereum
+   262→      if (!ethereum) {
+   263→        setPaymentError('Крипто портфейл не е намерен. Инсталирай MetaMask или отвори в crypto browser.')
+   264→        setPaymentStep('error')
+   265→        return
+   266→      }
+   267→      
+   268→      // Request accounts
+   269→      const accounts = await ethereum.request({ method: 'eth_requestAccounts' })
+   270→      const addr = accounts[0]
+   271→      setWalletAddress(addr)
+   272→      addLog('info', `Портфейл свързан: ${addr.slice(0, 10)}...${addr.slice(-6)}`)
+   273→      
+   274→      // Switch to Base network
+   275→      try {
+   276→        await ethereum.request({
+   277→          method: 'wallet_switchEthereumChain',
+   278→          params: [{ chainId: BASE_CHAIN_ID }]
+   279→        })
+   280→      } catch (switchError: any) {
+   281→        // If chain not added, add it
+   282→        if (switchError.code === 4902) {
+   283→          await ethereum.request({
+   284→            method: 'wallet_addEthereumChain',
+   285→            params: [{
+   286→              chainId: BASE_CHAIN_ID,
+   287→              chainName: 'Base',
+   288→              nativeCurrency: { name: 'Ethereum', symbol: 'ETH', decimals: 18 },
+   289→              rpcUrls: ['https://mainnet.base.org'],
+   290→              blockExplorerUrls: ['https://basescan.org']
+   291→            }]
+   292→          })
+   293→        } else {
+   294→          throw switchError
+   295→        }
+   296→      }
+   297→      
+   298→      // Check USDC balance using raw eth_call
+   299→      const balanceHex = await ethereum.request({
+   300→        method: 'eth_call',
+   301→        params: [{
+   302→          to: USDC_ADDRESS,
+   303→          data: '0x70a08231' + addr.slice(2).padStart(64, '0')
+   304→        }, 'latest']
+   305→      })
+   306→      const balanceRaw = parseInt(balanceHex, 16)
+   307→      const balanceUSDC = balanceRaw / 1e6
+   308→      setWalletBalance(balanceUSDC.toFixed(2))
+   309→      
+   310→      if (balanceUSDC < 0.25) {
+   311→        addLog('warning', `Баланс: ${balanceUSDC.toFixed(2)} USDC — нужни са 0.25 USDC`)
+   312→      } else {
+   313→        addLog('success', `USDC баланс: ${balanceUSDC.toFixed(2)} — готов за плащане`)
+   314→      }
+   315→      
+   316→      setPaymentStep('ready')
+   317→    } catch (err: any) {
+   318→      setPaymentError(err.message || 'Грешка при свързване с портфейла')
+   319→      setPaymentStep('error')
+   320→      addLog('error', `Грешка портфейл: ${err.message || 'неизвестна'}`)
+   321→    }
+   322→  }, [addLog])
+   323→
+   324→  const sendUSDCTransfer = useCallback(async () => {
+   325→    if (!walletAddress) return
+   326→    setPaymentStep('sending')
+   327→    setPaymentError('')
+   328→    addLog('info', 'Изпращане на 0.25 USDC на Base...')
+   329→    
+   330→    try {
+   331→      const ethereum = (window as any).ethereum
+   332→      
+   333→      // USDC transfer(address to, uint256 amount)
+   334→      // amount = 0.25 * 10^6 = 250000
+   335→      const amountHex = '0x' + (250000).toString(16).padStart(64, '0')
+   336→      const toPadded = API_WALLET.slice(2).padStart(64, '0')
+   337→      
+   338→      const txHashResult = await ethereum.request({
+   339→        method: 'eth_sendTransaction',
+   340→        params: [{
+   341→          from: walletAddress,
+   342→          to: USDC_ADDRESS,
+   343→          data: '0xa9059cbb' + toPadded + amountHex,
+   344→        }]
+   345→      })
+   346→      
+   347→      setTxHash(txHashResult)
+   348→      setPaymentStep('confirming')
+   349→      addLog('info', `Транзакция изпратена: ${txHashResult.slice(0, 18)}...`)
+   350→      
+   351→      // Wait for confirmation
+   352→      let receipt: any = null
+   353→      for (let i = 0; i < 30; i++) {
+   354→        await new Promise(r => setTimeout(r, 2000))
+   355→        try {
+   356→          receipt = await ethereum.request({
+   357→            method: 'eth_getTransactionReceipt',
+   358→            params: [txHashResult]
+   359→          })
+   360→          if (receipt) break
+   361→        } catch { /* retry */ }
+   362→      }
+   363→      
+   364→      if (!receipt || receipt.status !== '0x1') {
+   365→        setPaymentError('Транзакцията се потвърждава или е неуспешна. Моля изчакайте и опитайте отново.')
+   366→        setPaymentStep('error')
+   367→        addLog('error', 'Транзакцията не е потвърдена')
+   368→        return
+   369→      }
+   370→      
+   371→      addLog('success', 'USDC транзакция потвърдена на Base!')
+   372→      setPaymentStep('fetching')
+   373→      
+   374→      // Now call the API with the tx hash
+   375→      addLog('info', 'Заявка за данни с tx_hash...')
+   376→      const apiRes = await fetch(`/api/kristo?endpoint=/travel/weekend-getaway&x-payment=${txHashResult}`)
+   377→      const apiJson = await apiRes.json()
+   378→      
+   379→      if (apiJson.status === 200 && apiJson.data?.product) {
+   380→        setTravelData(apiJson.data)
+   381→        setPaymentStep('success')
+   382→        addLog('payment', 'УСПЕХ! Данните за пътуване са получени след реално плащане!')
+   383→        playSaleSound()
+   384→        sendNotification(
+   385→          'Плащане потвърдено!',
+   386→          '0.25 USDC получени — данните са доставени.'
+   387→        )
+   388→        // Refresh payments
+   389→        setTimeout(() => checkPayments(), 3000)
+   390→      } else {
+   391→        setPaymentError(apiJson.data?.error || 'API не прие плащането. Опитайте отново.')
+   392→        setPaymentStep('error')
+   393→        addLog('error', `API отхвърли плащането: ${apiJson.data?.error || 'неизвестна грешка'}`)
+   394→      }
+   395→    } catch (err: any) {
+   396→      setPaymentError(err.message || 'Грешка при изпращане на USDC')
+   397→      setPaymentStep('error')
+   398→      addLog('error', `USDC грешка: ${err.message || 'неизвестна'}`)
+   399→    }
+   400→  }, [walletAddress, addLog, playSaleSound, sendNotification, checkPayments])
+   401→
+   402→  const fetchWithManualTx = useCallback(async () => {
+   403→    if (!manualTxHash.trim()) return
+   404→    setPaymentStep('fetching')
+   405→    setPaymentError('')
+   406→    addLog('info', `Проверка на tx: ${manualTxHash.slice(0, 18)}...`)
+   407→    
+   408→    try {
+   409→      const apiRes = await fetch(`/api/kristo?endpoint=/travel/weekend-getaway&x-payment=${manualTxHash.trim()}`)
+   410→      const apiJson = await apiRes.json()
+   411→      
+   412→      if (apiJson.status === 200 && apiJson.data?.product) {
+   413→        setTravelData(apiJson.data)
+   414→        setTxHash(manualTxHash.trim())
+   415→        setPaymentStep('success')
+   416→        addLog('payment', 'УСПЕХ! Данните са доставени след потвърждение на плащането!')
+   417→        playSaleSound()
+   418→        sendNotification('Плащане потвърдено!', '0.25 USDC получени — данните са доставени.')
+   419→        setTimeout(() => checkPayments(), 3000)
+   420→      } else {
+   421→        setPaymentError(apiJson.data?.error || 'Транзакцията не е валидно плащане')
+   422→        setPaymentStep('error')
+   423→        addLog('error', `Невалидно: ${apiJson.data?.error || 'неизвестна грешка'}`)
+   424→      }
+   425→    } catch (err: any) {
+   426→      setPaymentError('Грешка при проверка на транзакцията')
+   427→      setPaymentStep('error')
+   428→    }
+   429→  }, [manualTxHash, addLog, playSaleSound, sendNotification, checkPayments])
+   430→
+   431→  const copyAddress = useCallback(() => {
+   432→    navigator.clipboard.writeText(API_WALLET)
+   433→    setCopied(true)
+   434→    setTimeout(() => setCopied(false), 2000)
+   435→  }, [])
+   436→
+   437→  // Initial load
+   438→  useEffect(() => {
+   439→    checkHealth()
+   440→    checkPayments()
+   441→  }, [checkHealth, checkPayments])
+   442→
+   443→  // Auto-monitoring every 30s
+   444→  useEffect(() => {
+   445→    if (!monitoring) return
+   446→    const interval = setInterval(() => { checkPayments() }, 30000)
+   447→    return () => clearInterval(interval)
+   448→  }, [monitoring, checkPayments])
+   449→
+   450→  // Keep-alive every 14 min
+   451→  useEffect(() => {
+   452→    const ping = () => checkKeepalive()
+   453→    ping()
+   454→    const interval = setInterval(ping, 14 * 60 * 1000)
+   455→    return () => clearInterval(interval)
+   456→  }, [checkKeepalive])
+   457→
+   458→  const noSales24h = basescan !== null && basescan.count_24h === 0 && !basescan.error
+   459→  const hasSales = basescan !== null && basescan.count_24h > 0
+   460→  const renderOnline = keepalive?.render_status === 'online'
+   461→
+   462→  return (
+   463→    <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 text-white">
+   464→      {/* Header */}
+   465→      <header className="sticky top-0 z-50 border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
+   466→        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center justify-between">
+   467→          <div className="flex items-center gap-3">
+   468→            <div className="w-9 h-9 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+   469→              <Zap className="w-5 h-5 text-emerald-400" />
+   470→            </div>
+   471→            <div>
+   472→              <h1 className="text-lg font-bold tracking-tight">Kristo Travel</h1>
+   473→              <p className="text-xs text-zinc-500">x402 Pay-per-Call</p>
+   474→            </div>
+   475→          </div>
+   476→          <div className="flex items-center gap-2">
+   477→            {renderOnline ? (
+   478→              <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 text-[10px]">
+   479→                <Wifi className="w-3 h-3 mr-1" /> LIVE
+   480→              </Badge>
+   481→            ) : (
+   482→              <Badge variant="outline" className="border-zinc-700 text-zinc-500 text-[10px]">
+   483→                <WifiOff className="w-3 h-3 mr-1" /> OFFLINE
+   484→              </Badge>
+   485→            )}
+   486→            <Button
+   487→              variant="ghost" size="icon"
+   488→              className={monitoring ? 'text-emerald-400' : 'text-zinc-600'}
+   489→              onClick={() => {
+   490→                setMonitoring(!monitoring)
+   491→                addLog('info', monitoring ? 'Мониторинг спрян' : 'Мониторинг включен (всеки 30с)')
+   492→              }}
+   493→              title={monitoring ? 'Спри мониторинга' : 'Включи мониторинга'}
+   494→            >
+   495→              {monitoring ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+   496→            </Button>
+   497→            <Button
+   498→              variant="outline" size="sm"
+   499→              className="border-zinc-700 text-zinc-300"
+   500→              onClick={() => { checkHealth(); checkPayments(); checkKeepalive() }}
+   501→              disabled={loading}
+   502→            >
+   503→              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+   504→              Обнови
+   505→            </Button>
+   506→          </div>
+   507→        </div>
+   508→      </header>
+   509→
+   510→      <main className="max-w-3xl mx-auto px-4 py-6 space-y-6 pb-20">
+   511→
+   512→        {/* NEW SALE FLASH */}
+   513→        {newSaleFlash && hasSales && (
+   514→          <SaleFlash>
+   515→            <div className="flex items-center gap-3">
+   516→              <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center animate-bounce">
+   517→                <CircleDollarSign className="w-7 h-7 text-emerald-400" />
+   518→              </div>
+   519→              <div>
+   520→                <p className="text-lg font-bold text-emerald-300">НОВА ПРОДАЖБА!</p>
+   521→                <p className="text-2xl font-bold text-emerald-400">+{basescan.total_usdc} USDC</p>
+   522→              </div>
+   523→            </div>
+   524→          </SaleFlash>
+   525→        )}
+   526→
+   527→        {/* 24h No-Sales Warning */}
+   528→        {noSales24h && (
+   529→          <Card className="border-amber-500/40 bg-amber-950/30">
+   530→            <CardContent className="p-4">
+   531→              <div className="flex items-start gap-3">
+   532→                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+   533→                <div className="flex-1">
+   534→                  <p className="text-sm font-medium text-amber-300">Няма продажби 24 часа</p>
+   535→                  <p className="text-xs text-zinc-500 mt-1">
+   536→                    Използвай бутона &quot;Тестово плащане&quot; по-долу за да провериш системата.
+   537→                  </p>
+   538→                </div>
+   539→                <Badge variant="outline" className="border-amber-500/30 text-amber-400 text-[10px] shrink-0">
+   540→                  <Timer className="w-3 h-3 mr-1" /> 24ч
+   541→                </Badge>
+   542→              </div>
+   543→            </CardContent>
+   544→          </Card>
+   545→        )}
+   546→
+   547→        {/* Active Sales Banner */}
+   548→        {hasSales && !newSaleFlash && (
+   549→          <Card className="border-emerald-500/40 bg-emerald-950/30">
+   550→            <CardContent className="p-4">
+   551→              <div className="flex items-center justify-between">
+   552→                <div className="flex items-center gap-3">
+   553→                  <TrendingUp className="w-5 h-5 text-emerald-400" />
+   554→                  <div>
+   555→                    <p className="text-sm font-medium text-emerald-300">
+   556→                      {basescan.count_24h} {basescan.count_24h === 1 ? 'продажба' : 'продажби'} днес
+   557→                    </p>
+   558→                    <p className="text-xl font-bold text-emerald-400">${basescan.total_usdc} USDC</p>
+   559→                  </div>
+   560→                </div>
+   561→                <Badge className="bg-emerald-500/20 text-emerald-300 border-emerald-500/30">
+   562→                  <Radio className="w-3 h-3 mr-1" /> LIVE
+   563→                </Badge>
+   564→              </div>
+   565→            </CardContent>
+   566→          </Card>
+   567→        )}
+   568→
+   569→        {/* Status Banner */}
+   570→        <Card className="border-zinc-800 bg-zinc-900/60">
+   571→          <CardContent className="p-4">
+   572→            <div className="flex items-center justify-between">
+   573→              <div className="flex items-center gap-3">
+   574→                <StatusDot online={health?.status === 'online'} />
+   575→                <span className="font-medium">
+   576→                  {health ? 'API Онлайн' : 'API Недостъпен'}
+   577→                </span>
+   578→                {monitoring && <Badge variant="outline" className="border-emerald-500/30 text-emerald-400 text-[10px] ml-1">АВТО</Badge>}
+   579→              </div>
+   580→              <div className="flex items-center gap-2 text-xs text-zinc-500">
+   581→                <Clock className="w-3 h-3" />
+   582→                {lastCheck}
+   583→              </div>
+   584→            </div>
+   585→          </CardContent>
+   586→        </Card>
+   587→
+   588→        {/* Revenue & Stats */}
+   589→        <div className="grid grid-cols-2 gap-3">
+   590→          <Card className="border-zinc-800 bg-zinc-900/60">
+   591→            <CardContent className="p-3 text-center">
+   592→              <CircleDollarSign className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
+   593→              <p className="text-xl font-bold text-zinc-100">${basescan?.total_usdc || '0.00'}</p>
+   594→              <p className="text-[10px] text-zinc-500">Приходи 24ч (USDC)</p>
+   595→            </CardContent>
+   596→          </Card>
+   597→          <Card className="border-zinc-800 bg-zinc-900/60">
+   598→            <CardContent className="p-3 text-center">
+   599→              <Activity className="w-5 h-5 text-sky-400 mx-auto mb-1" />
+   600→              <p className="text-xl font-bold text-zinc-100">{basescan?.count_24h ?? '-'}</p>
+   601→              <p className="text-[10px] text-zinc-500">Транзакции 24ч</p>
+   602→            </CardContent>
+   603→          </Card>
+   604→        </div>
+   605→
+   606→        {/* ===== REAL PAYMENT TEST ===== */}
+   607→        <Card className={`border-2 ${
+   608→          paymentStep === 'success' ? 'border-emerald-500/60 bg-emerald-950/20' :
+   609→          paymentStep === 'error' ? 'border-red-500/40 bg-red-950/20' :
+   610→          paymentStep !== 'idle' ? 'border-sky-500/40 bg-sky-950/20' :
+   611→          'border-amber-500/30 bg-zinc-900/60'
+   612→        }`}>
+   613→          <CardHeader className="pb-3">
+   614→            <CardTitle className="text-base flex items-center gap-2">
+   615→              <CreditCard className="w-4 h-4 text-amber-400" />
+   616→              Тестово плащане
+   617→              <Badge variant="outline" className="border-amber-500/40 text-amber-400 text-[10px] ml-auto">
+   618→                РЕАЛНО USDC
+   619→              </Badge>
+   620→            </CardTitle>
+   621→          </CardHeader>
+   622→          <CardContent className="space-y-4">
+   623→            
+   624→            {/* Payment flow steps indicator */}
+   625→            <div className="flex items-center gap-1 text-[10px]">
+   626→              {['Свържи', 'Плати', 'Потвърди', 'Данни'].map((label, i) => {
+   627→                const steps: PaymentStep[] = ['connecting', 'sending', 'confirming', 'fetching', 'success']
+   628→                const stepIdx = steps.indexOf(paymentStep)
+   629→                const isActive = stepIdx >= i || paymentStep === 'success'
+   630→                return (
+   631→                  <div key={i} className="flex items-center gap-1 flex-1">
+   632→                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold ${
+   633→                      paymentStep === 'success' ? 'bg-emerald-500/30 text-emerald-400' :
+   634→                      isActive && paymentStep !== 'idle' && paymentStep !== 'error' ? 'bg-sky-500/30 text-sky-400' :
+   635→                      'bg-zinc-800 text-zinc-600'
+   636→                    }`}>
+   637→                      {paymentStep === 'success' ? '✓' : i + 1}
+   638→                    </div>
+   639→                    <span className={`hidden sm:inline ${isActive ? 'text-zinc-300' : 'text-zinc-600'}`}>{label}</span>
+   640→                    {i < 3 && <div className={`flex-1 h-px ${isActive ? 'bg-sky-500/30' : 'bg-zinc-800'}`} />}
+   641→                  </div>
+   642→                )
+   643→              })}
+   644→            </div>
+   645→
+   646→            {/* Step: Idle / Connect */}
+   647→            {paymentStep === 'idle' && (
+   648→              <div className="space-y-3">
+   649→                <div className="rounded-lg bg-zinc-950/60 p-3 space-y-2">
+   650→                  <div className="flex items-center justify-between">
+   651→                    <p className="text-xs text-zinc-400">Плати на:</p>
+   652→                    <button onClick={copyAddress} className="flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300">
+   653→                      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+   654→                      {copied ? 'Копирано!' : 'Копирай'}
+   655→                    </button>
+   656→                  </div>
+   657→                  <p className="font-mono text-xs text-emerald-300 break-all">{API_WALLET}</p>
+   658→                  <div className="flex gap-4 text-[10px] text-zinc-500">
+   659→                    <span>Мрежа: <span className="text-zinc-300">Base</span></span>
+   660→                    <span>Сума: <span className="text-zinc-300">0.25 USDC</span></span>
+   661→                  </div>
+   662→                </div>
+   663→                
+   664→                {hasWallet ? (
+   665→                  <Button
+   666→                    className="w-full bg-amber-600 hover:bg-amber-500 text-white"
+   667→                    onClick={connectWallet}
+   668→                  >
+   669→                    <Wallet className="w-4 h-4 mr-2" />
+   670→                    Свържи портфейл и плати
+   671→                  </Button>
+   672→                ) : (
+   673→                  <div className="space-y-2">
+   674→                    <p className="text-xs text-zinc-400 text-center">Крипто портфейл не е открит</p>
+   675→                    <Button
+   676→                      className="w-full bg-zinc-700 hover:bg-zinc-600"
+   677→                      onClick={() => setPaymentStep('manual')}
+   678→                    >
+   679→                      <Send className="w-4 h-4 mr-2" />
+   680→                      Ръчно въвеждане на tx hash
+   681→                    </Button>
+   682→                  </div>
+   683→                )}
+   684→              </div>
+   685→            )}
+   686→
+   687→            {/* Step: Connecting */}
+   688→            {paymentStep === 'connecting' && (
+   689→              <div className="flex items-center justify-center py-4 gap-2 text-amber-400">
+   690→                <Loader2 className="w-5 h-5 animate-spin" />
+   691→                <span className="text-sm">Свързване с портфейла...</span>
+   692→              </div>
+   693→            )}
+   694→
+   695→            {/* Step: Ready to send */}
+   696→            {paymentStep === 'ready' && (
+   697→              <div className="space-y-3">
+   698→                <div className="rounded-lg bg-zinc-950/60 p-3 space-y-1">
+   699→                  <div className="flex items-center justify-between">
+   700→                    <span className="text-xs text-zinc-400">Портфейл:</span>
+   701→                    <span className="text-xs font-mono text-sky-300">{walletAddress?.slice(0,10)}...{walletAddress?.slice(-6)}</span>
+   702→                  </div>
+   703→                  <div className="flex items-center justify-between">
+   704→                    <span className="text-xs text-zinc-400">USDC баланс:</span>
+   705→                    <span className={`text-xs font-bold ${walletBalance && parseFloat(walletBalance) >= 0.25 ? 'text-emerald-400' : 'text-red-400'}`}>
+   706→                      {walletBalance} USDC
+   707→                    </span>
+   708→                  </div>
+   709→                </div>
+   710→                <Button
+   711→                  className="w-full bg-emerald-600 hover:bg-emerald-500"
+   712→                  onClick={sendUSDCTransfer}
+   713→                  disabled={walletBalance ? parseFloat(walletBalance) < 0.25 : true}
+   714→                >
+   715→                  <Send className="w-4 h-4 mr-2" />
+   716→                  Изпрати 0.25 USDC
+   717→                </Button>
+   718→                {walletBalance && parseFloat(walletBalance) < 0.25 && (
+   719→                  <p className="text-[10px] text-amber-400 text-center">Недостатъчен USDC баланс. Трябват 0.25 USDC на Base.</p>
+   720→                )}
+   721→              </div>
+   722→            )}
+   723→
+   724→            {/* Step: Sending / Confirming / Fetching */}
+   725→            {(paymentStep === 'sending' || paymentStep === 'confirming' || paymentStep === 'fetching') && (
+   726→              <div className="space-y-3 py-2">
+   727→                <div className="flex items-center justify-center gap-2 text-sky-400">
+   728→                  <Loader2 className="w-5 h-5 animate-spin" />
+   729→                  <span className="text-sm">{
+   730→                    paymentStep === 'sending' ? 'Изпращане на USDC...' :
+   731→                    paymentStep === 'confirming' ? 'Чакане на потвърждение...' :
+   732→                    'Получаване на данните...'
+   733→                  }</span>
+   734→                </div>
+   735→                {txHash && (
+   736→                  <a
+   737→                    href={`https://basescan.org/tx/${txHash}`}
+   738→                    target="_blank"
+   739→                    rel="noopener noreferrer"
+   740→                    className="block text-center text-[10px] text-sky-400 hover:underline"
+   741→                  >
+   742→                    Виж в Basescan ↗
+   743→                  </a>
+   744→                )}
+   745→              </div>
+   746→            )}
+   747→
+   748→            {/* Step: Manual tx hash input */}
+   749→            {paymentStep === 'manual' && (
+   750→              <div className="space-y-3">
+   751→                <div className="rounded-lg bg-zinc-950/60 p-3">
+   752→                  <p className="text-xs text-zinc-400 mb-2">1. Изпрати 0.25 USDC на Base към:</p>
+   753→                  <div className="flex items-center justify-between">
+   754→                    <p className="font-mono text-xs text-emerald-300 break-all">{API_WALLET}</p>
+   755→                    <button onClick={copyAddress} className="text-emerald-400 shrink-0 ml-2">
+   756→                      {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+   757→                    </button>
+   758→                  </div>
+   759→                  <p className="text-xs text-zinc-400 mt-2">2. Въведи tx hash:</p>
+   760→                  <input
+   761→                    type="text"
+   762→                    value={manualTxHash}
+   763→                    onChange={(e) => setManualTxHash(e.target.value)}
+   764→                    placeholder="0x..."
+   765→                    className="w-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs font-mono text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-sky-500"
+   766→                  />
+   767→                </div>
+   768→                <Button
+   769→                  className="w-full bg-emerald-600 hover:bg-emerald-500"
+   770→                  onClick={fetchWithManualTx}
+   771→                  disabled={!manualTxHash.trim().startsWith('0x')}
+   772→                >
+   773→                  <ShieldCheck className="w-4 h-4 mr-2" />
+   774→                  Провери плащане и вземи данните
+   775→                </Button>
+   776→              </div>
+   777→            )}
+   778→
+   779→            {/* Step: Error */}
+   780→            {paymentStep === 'error' && (
+   781→              <div className="space-y-3">
+   782→                <div className="rounded-lg bg-red-950/30 border border-red-500/30 p-3">
+   783→                  <p className="text-xs text-red-400">{paymentError}</p>
+   784→                </div>
+   785→                <Button
+   786→                  className="w-full bg-zinc-700 hover:bg-zinc-600"
+   787→                  onClick={() => { setPaymentStep('idle'); setPaymentError(''); setTxHash(''); setTravelData(null) }}
+   788→                >
+   789→                  <RefreshCw className="w-4 h-4 mr-2" />
+   790→                  Опитай отново
+   791→                </Button>
+   792→              </div>
+   793→            )}
+   794→
+   795→            {/* Step: Success */}
+   796→            {paymentStep === 'success' && travelData && (
+   797→              <div className="space-y-3">
+   798→                <div className="rounded-lg bg-emerald-950/30 border border-emerald-500/30 p-4">
+   799→                  <div className="flex items-center gap-2 mb-3">
+   800→                    <ShieldCheck className="w-5 h-5 text-emerald-400" />
+   801→                    <span className="text-sm font-bold text-emerald-300">Плащане потвърдено!</span>
+   802→                  </div>
+   803→                  {txHash && (
+   804→                    <a
+   805→                      href={`https://basescan.org/tx/${txHash}`}
+   806→                      target="_blank"
+   807→                      rel="noopener noreferrer"
+   808→                      className="text-[10px] text-sky-400 hover:underline mb-3 block"
+   809→                    >{txHash.slice(0, 22)}...{txHash.slice(-8)} — Basescan ↗</a>
+   810→                  )}
+   811→                  <div className="border-t border-emerald-500/20 pt-3 mt-3">
+   812→                    <p className="text-xs font-medium text-zinc-300 mb-2">Получени данни:</p>
+   813→                    <p className="text-sm font-bold text-emerald-400">{travelData.product}</p>
+   814→                    <p className="text-[10px] text-zinc-500 mt-1">{travelData.seasonality_context}</p>
+   815→                    <div className="mt-3 space-y-1">
+   816→                      {travelData.top_locations?.map((loc: any, i: number) => (
+   817→                        <div key={i} className="flex items-center justify-between text-xs">
+   818→                          <span className="text-zinc-300">{loc.city}, {loc.country}</span>
+   819→                          <span className="text-emerald-400">${loc.avg_budget_usd}</span>
+   820→                        </div>
+   821→                      ))}
+   822→                    </div>
+   823→                  </div>
+   824→                </div>
+   825→                <Button
+   826→                  className="w-full bg-zinc-700 hover:bg-zinc-600"
+   827→                  onClick={() => { setPaymentStep('idle'); setTxHash(''); setTravelData(null); setWalletAddress(null) }}
+   828→                >
+   829→                  <ArrowRight className="w-4 h-4 mr-2" />
+   830→                  Ново плащане
+   831→                </Button>
+   832→              </div>
+   833→            )}
+   834→          </CardContent>
+   835→        </Card>
+   836→
+   837→        {/* Recent Transactions */}
+   838→        {basescan && basescan.transactions.length > 0 && (
+   839→          <Card className="border-zinc-800 bg-zinc-900/60">
+   840→            <CardHeader className="pb-3">
+   841→              <CardTitle className="text-base flex items-center gap-2">
+   842→                <Eye className="w-4 h-4 text-emerald-400" />
+   843→                Последни плащания
+   844→              </CardTitle>
+   845→            </CardHeader>
+   846→            <CardContent className="space-y-2">
+   847→              {basescan.transactions.slice(0, 5).map((tx) => (
+   848→                <div key={tx.hash} className="flex items-center justify-between bg-zinc-950/60 rounded-lg p-3">
+   849→                  <div className="min-w-0 flex-1">
+   850→                    <p className="text-sm font-medium text-emerald-300">+${tx.value} USDC</p>
+   851→                    <p className="text-[10px] text-zinc-500 font-mono">{tx.from.slice(0, 10)}...{tx.from.slice(-4)}</p>
+   852→                  </div>
+   853→                  <div className="text-right shrink-0 ml-3">
+   854→                    <p className="text-[10px] text-zinc-500">Block #{tx.block}</p>
+   855→                    <a
+   856→                      href={`https://basescan.org/tx/${tx.hash}`}
+   857→                      target="_blank"
+   858→                      rel="noopener noreferrer"
+   859→                      className="text-[10px] text-sky-400 flex items-center gap-0.5 justify-end"
+   860→                    >
+   861→                      Basescan <ExternalLink className="w-2.5 h-2.5" />
+   862→                    </a>
+   863→                  </div>
+   864→                </div>
+   865→              ))}
+   866→            </CardContent>
+   867→          </Card>
+   868→        )}
+   869→
+   870→        {/* API Details */}
+   871→        {health && (
+   872→          <Card className="border-zinc-800 bg-zinc-900/60">
+   873→            <CardHeader className="pb-3">
+   874→              <CardTitle className="text-base flex items-center gap-2">
+   875→                <Server className="w-4 h-4 text-emerald-400" />
+   876→                Състояние на сървъра
+   877→              </CardTitle>
+   878→            </CardHeader>
+   879→            <CardContent className="space-y-3">
+   880→              <div className="grid grid-cols-2 gap-3">
+   881→                <InfoItem label="Мрежа" value={health.network.toUpperCase()} />
+   882→                <InfoItem label="Web3" value={health.web3_connected ? 'Свързан' : 'Изключен'} />
+   883→              </div>
+   884→              <InfoItem label="Портфейл" value={`${health.wallet.slice(0, 10)}...${health.wallet.slice(-6)}`} />
+   885→              <InfoItem label="RPC" value={health.rpc} />
+   886→              <div className="pt-2 flex gap-4">
+   887→                <a
+   888→                  href={`https://basescan.org/address/${health.wallet}`}
+   889→                  target="_blank"
+   890→                  rel="noopener noreferrer"
+   891→                  className="text-emerald-400 hover:text-emerald-300 text-sm underline underline-offset-2"
+   892→                >Портфейл на Basescan</a>
+   893→                <a
+   894→                  href="https://kristo-travel-api.onrender.com/"
+   895→                  target="_blank"
+   896→                  rel="noopener noreferrer"
+   897→                  className="text-sky-400 hover:text-sky-300 text-sm underline underline-offset-2"
+   898→                >API документация</a>
+   899→              </div>
+   900→            </CardContent>
+   901→          </Card>
+   902→        )}
+   903→
+   904→        {/* Available Endpoints */}
+   905→        <Card className="border-zinc-800 bg-zinc-900/60">
+   906→          <CardHeader className="pb-3">
+   907→            <CardTitle className="text-base flex items-center gap-2">
+   908→              <Zap className="w-4 h-4 text-amber-400" />
+   909→              Продаваеми endpoints (6)
+   910→              <Badge variant="outline" className="border-amber-500/40 text-amber-400 text-[10px] ml-auto">
+   911→                $0.25 USDC/всеки
+   912→              </Badge>
+   913→            </CardTitle>
+   914→          </CardHeader>
+   915→          <CardContent className="space-y-2">
+   916→            {[
+   917→              { path: '/travel/destination-score', icon: Plane, label: 'Destination Score', desc: 'Оценка на 10 града — бюджет, риск, сезонност', color: 'text-sky-400' },
+   918→              { path: '/travel/flight-intel', icon: Plane, label: 'Flight Intel', desc: 'Цени на полети от 3 региона (EU/Asia/US)', color: 'text-emerald-400' },
+   919→              { path: '/travel/hotel-rates', icon: Building2, label: 'Hotel Rates', desc: 'Хотели в 10 града — бюджет/среден/лукс', color: 'text-violet-400' },
+   920→              { path: '/crypto/wallet-profile', icon: WalletIcon, label: 'Wallet Profile', desc: 'On-chain анализ на портфейл в Base', color: 'text-amber-400' },
+   921→              { path: '/crypto/whale-moves', icon: Fish, label: 'Whale Moves', desc: 'Големи USDC трансфери (>1000 USDC)', color: 'text-red-400' },
+   922→              { path: '/crypto/gas-oracle', icon: Fuel, label: 'Gas Oracle', desc: 'Live gas цена на Base мрежата', color: 'text-cyan-400' },
+   923→            ].map((ep) => (
+   924→              <div key={ep.path} className="flex items-center gap-3 bg-zinc-950/60 rounded-lg p-3">
+   925→                <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
+   926→                  <ep.icon className={`w-4 h-4 ${ep.color}`} />
+   927→                </div>
+   928→                <div className="flex-1 min-w-0">
+   929→                  <p className="text-xs font-medium text-zinc-200 truncate">{ep.label}</p>
+   930→                  <p className="text-[10px] text-zinc-500 truncate">{ep.desc}</p>
+   931→                </div>
+   932→                <p className="text-[10px] font-mono text-zinc-600 shrink-0">GET</p>
+   933→              </div>
+   934→            ))}
+   935→          </CardContent>
+   936→        </Card>
+   937→
+   938→        {/* Quick Info */}
+   939→        <div className="grid grid-cols-3 gap-3">
+   940→          <Card className="border-zinc-800 bg-zinc-900/60">
+   941→            <CardContent className="p-3 text-center">
+   942→              <CircleDollarSign className="w-5 h-5 text-emerald-400 mx-auto mb-1" />
+   943→              <p className="text-lg font-bold text-zinc-100">$0.25</p>
+   944→              <p className="text-[10px] text-zinc-500">Цена/заявка</p>
+   945→            </CardContent>
+   946→          </Card>
+   947→          <Card className="border-zinc-800 bg-zinc-900/60">
+   948→            <CardContent className="p-3 text-center">
+   949→              <Globe className="w-5 h-5 text-sky-400 mx-auto mb-1" />
+   950→              <p className="text-lg font-bold text-zinc-100">Base</p>
+   951→              <p className="text-[10px] text-zinc-500">Мрежа</p>
+   952→            </CardContent>
+   953→          </Card>
+   954→          <Card className="border-zinc-800 bg-zinc-900/60">
+   955→            <CardContent className="p-3 text-center">
+   956→              <Wallet className="w-5 h-5 text-amber-400 mx-auto mb-1" />
+   957→              <p className="text-lg font-bold text-zinc-100">USDC</p>
+   958→              <p className="text-[10px] text-zinc-500">Актив</p>
+   959→            </CardContent>
+   960→          </Card>
+   961→        </div>
+   962→
+   963→        {/* Activity Log */}
+   964→        <Card className="border-zinc-800 bg-zinc-900/60">
+   965→          <CardHeader className="pb-3">
+   966→            <CardTitle className="text-base flex items-center gap-2">
+   967→              <Activity className="w-4 h-4 text-zinc-400" />
+   968→              Лог на активността
+   969→              {monitoring && <Badge variant="outline" className="border-zinc-700 text-zinc-500 text-[10px] ml-2">AUTO 30s</Badge>}
+   970→            </CardTitle>
+   971→          </CardHeader>
+   972→          <CardContent>
+   973→            {logs.length === 0 ? (
+   974→              <p className="text-sm text-zinc-600 text-center py-4">Зареждане...</p>
+   975→            ) : (
+   976→              <div className="max-h-72 overflow-y-auto space-y-1">
+   977→                {logs.map((log, i) => (
+   978→                  <div key={i} className={`flex items-start gap-2 text-xs p-1.5 rounded ${
+   979→                    log.type === 'payment' ? 'bg-emerald-950/40 border border-emerald-500/20' :
+   980→                    log.type === 'warning' ? 'bg-amber-950/20' : ''
+   981→                  }`}>
+   982→                    <span className="text-zinc-600 font-mono shrink-0 pt-0.5">{log.time}</span>
+   983→                    <span className={`shrink-0 ${
+   984→                      log.type === 'success' ? 'text-emerald-400' :
+   985→                      log.type === 'error' ? 'text-red-400' :
+   986→                      log.type === 'payment' ? 'text-emerald-300' :
+   987→                      log.type === 'warning' ? 'text-amber-400' :
+   988→                      'text-sky-400'
+   989→                    }`}>
+   990→                      {log.type === 'success' ? 'OK' : log.type === 'error' ? '!!' : log.type === 'payment' ? '$$' : log.type === 'warning' ? '?!' : '>>'}
+   991→                    </span>
+   992→                    <span className={log.type === 'payment' ? 'text-emerald-200 font-medium' : 'text-zinc-400'}>{log.message}</span>
+   993→                  </div>
+   994→                ))}
+   995→              </div>
+   996→            )}
+   997→          </CardContent>
+   998→        </Card>
+   999→
+  1000→      </main>
+  1001→    </div>
+  1002→  )
+  1003→}
+  1004→
+  1005→function InfoItem({ label, value }: { label: string; value: string }) {
+  1006→  return (
+  1007→    <div>
+  1008→      <p className="text-xs text-zinc-500">{label}</p>
+  1009→      <p className="text-sm font-mono text-zinc-200 break-all">{value}</p>
+  1010→    </div>
+  1011→  )
+  1012→}

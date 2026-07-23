@@ -1,0 +1,92 @@
+[
+  {
+    "url": "https://relai.fi/market",
+    "name": "x402 API Marketplace - Browse Pay-Per-Call APIs - RelAI",
+    "snippet": "Discover and consume x402 protocol APIs. Pay-per-call marketplace with instant USDC micropayments on Solana, Base, Avalanche, SKALE, Ethereum, and Polygon. Missing: directory | Show results with: directory",
+    "host_name": "relai.fi",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://eco.com/support/en/articles/14839402-x402-protocol-explained",
+    "name": "x402 Protocol Explained | Support - Eco",
+    "snippet": "x402 is an open HTTP 402 payment protocol that lets servers charge AI agents and machines for API calls using stablecoins. Missing: register | Show results with: register",
+    "host_name": "eco.com",
+    "rank": 1,
+    "date": "Jul 16, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://simplescraper.io/blog/x402-payment-protocol",
+    "name": "How to x402: The Complete Guide to the AI Agent Payment Protocol",
+    "snippet": "x402, a protocol built on top of HTTP 402, makes per-request payments work via US dollar pegged stablecoins. Dec 2025 V2 Release ・ 2026 Agents ... Missing: marketplace | Show results with: marketplace",
+    "host_name": "simplescraper.io",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://yellow.com/news/coinbase-agentic-market-ai-agent-data-access",
+    "name": "Coinbase Launches Agentic.Market, Letting AI Agents Buy Bloomberg",
+    "snippet": "Coinbase has launched Agentic.market, a marketplace ...",
+    "host_name": "yellow.com",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://systemprompt.io/guides/monetize-mcp-server-x402",
+    "name": "Monetize an MCP Server with x402: The Complete Guide",
+    "snippet": "the protocol has processed roughly 165 million transactions a median price of $0.028 per call (as of April 2026, per Coinbase's x402 ecosystem ...",
+    "host_name": "systemprompt.io",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.ledger.com/academy/topics/economics-and-regulation/what-is-x402",
+    "name": "What is x402? - Ledger",
+    "snippet": "x402 is an open payment standard developed by Coinbase and launched in May 2025. It serves as a decentralized payment rail for the internet, ... Missing: marketplace directory",
+    "host_name": "www.ledger.com",
+    "rank": 5,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.x402apis.io",
+    "name": "x402 API Registry - Decentralized API Marketplace",
+    "snippet": "The Universal API Registry. A decentralized marketplace for pay-per-call APIs. Discover, rank, and connect to a global network of providers.",
+    "host_name": "www.x402apis.io",
+    "rank": 6,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://note.com/x402inc/n/nf0ee8a4a2ce8?hl=en",
+    "name": "From \"Ordering on Behalf of Humans\" to \"Autonomous Purchasing\" - note",
+    "snippet": "x402 processed over 169 million payments spanning 590,000 buyers and 100,000 sellers. By chain, Base accounted for over 119 million ... Missing: directory | Show results with: directory",
+    "host_name": "note.com",
+    "rank": 7,
+    "date": "Jul 16, 2026",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.interzoid.com/x402-payments",
+    "name": "Pay-Per-Call API Access with USDC Stablecoin - Interzoid",
+    "snippet": "The x402 protocol brings native HTTP payments to API access — letting any client pay per call using blockchain-settled USDC, with no accounts or credentials to ...",
+    "host_name": "www.interzoid.com",
+    "rank": 8,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://wavect.io/blog/x402-payments-comparison-2026",
+    "name": "x402 Payments 2026: Coinbase, Stripe & Alternatives - Wavect GmbH",
+    "snippet": "Compare x402 payment implementations for APIs, MCP servers and AI agents: Coinbase, Stripe, Cloudflare, AWS, costs, networks, compliance and ...",
+    "host_name": "wavect.io",
+    "rank": 9,
+    "date": "",
+    "favicon": ""
+  }
+]

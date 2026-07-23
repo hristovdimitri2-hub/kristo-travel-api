@@ -1,0 +1,47 @@
+[
+  {
+    "url": "https://www.x402apis.io",
+    "name": "x402 API Registry - Decentralized API Marketplace",
+    "snippet": "The central discovery hub for the x402 network. Find, rank, and connect to API providers in a decentralized marketplace powered by Solana micropayments. Missing: submit form",
+    "host_name": "www.x402apis.io",
+    "rank": 0,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://github.com/xpaysh/awesome-x402/blob/main/README.md",
+    "name": "awesome-x402/README.md at main - GitHub",
+    "snippet": "Perfect for AI agents, APIs, and micropayments. No API keys, no signup. x402-powered domain registration API for AI agents.",
+    "host_name": "github.com",
+    "rank": 1,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://www.x402apis.io/vision",
+    "name": "Decentralized API Marketplace - x402 API Registry",
+    "snippet": "The central discovery hub for the x402 network. Find, rank, and connect to API providers in a decentralized marketplace powered by Solana micropayments. Missing: submit github",
+    "host_name": "www.x402apis.io",
+    "rank": 2,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://providers.apis.io/providers/github",
+    "name": "GitHub - API Providers",
+    "snippet": "GitHub publishes 37 APIs on the APIs.io network, The GitHub Dependency Graph API lets you view and submit dependency information for a repository. Missing: x402apis. registration",
+    "host_name": "providers.apis.io",
+    "rank": 3,
+    "date": "",
+    "favicon": ""
+  },
+  {
+    "url": "https://docs.github.com/rest/guides/getting-started-with-the-rest-api",
+    "name": "Getting started with the REST API - GitHub Docs",
+    "snippet": "This article describes how to use the GitHub REST API with GitHub CLI, curl , or JavaScript. For a quickstart guide, see Quickstart for GitHub REST API. Missing: x402apis. | Show results with: x402apis.",
+    "host_name": "docs.github.com",
+    "rank": 4,
+    "date": "",
+    "favicon": ""
+  }
+]

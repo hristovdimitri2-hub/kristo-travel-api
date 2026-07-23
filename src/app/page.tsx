@@ -99,6 +99,17 @@ export default function Home() {
   const prevTxHashes = useRef<Set<string>>(new Set())
   const saleSoundRef = useRef(false)
 
+  // Selected endpoint for testing/purchase
+  const [selectedEndpoint, setSelectedEndpoint] = useState('/travel/destination-score')
+  const ENDPOINTS = [
+    { path: '/travel/destination-score', label: 'Destination Score' },
+    { path: '/travel/flight-intel', label: 'Flight Intel' },
+    { path: '/travel/hotel-rates', label: 'Hotel Rates' },
+    { path: '/crypto/wallet-profile', label: 'Wallet Profile' },
+    { path: '/crypto/whale-moves', label: 'Whale Moves' },
+    { path: '/crypto/gas-oracle', label: 'Gas Oracle' },
+  ]
+
   // Payment test state
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('idle')
   const [walletAddress, setWalletAddress] = useState<string | null>(null)
@@ -235,7 +246,7 @@ export default function Home() {
     setTesting(true)
     addLog('info', 'Тестване на x402 платежен endpoint...')
     try {
-      const res = await fetch('/api/kristo?endpoint=/travel/weekend-getaway')
+      const res = await fetch('/api/kristo?endpoint=' + selectedEndpoint)
       const json = await res.json()
       if (json.data?.x402_version) {
         setX402response(json.data)
@@ -373,7 +384,7 @@ export default function Home() {
       
       // Now call the API with the tx hash
       addLog('info', 'Заявка за данни с tx_hash...')
-      const apiRes = await fetch(`/api/kristo?endpoint=/travel/weekend-getaway&x-payment=${txHashResult}`)
+      const apiRes = await fetch(`/api/kristo?endpoint=${selectedEndpoint}&x-payment=${txHashResult}`)
       const apiJson = await apiRes.json()
       
       if (apiJson.status === 200 && apiJson.data?.product) {
@@ -406,7 +417,7 @@ export default function Home() {
     addLog('info', `Проверка на tx: ${manualTxHash.slice(0, 18)}...`)
     
     try {
-      const apiRes = await fetch(`/api/kristo?endpoint=/travel/weekend-getaway&x-payment=${manualTxHash.trim()}`)
+      const apiRes = await fetch(`/api/kristo?endpoint=${selectedEndpoint}&x-payment=${manualTxHash.trim()}`)
       const apiJson = await apiRes.json()
       
       if (apiJson.status === 200 && apiJson.data?.product) {
@@ -620,7 +631,20 @@ export default function Home() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            
+            {/* Endpoint Selector */}
+            <div className="space-y-1">
+              <p className="text-[10px] text-zinc-500">Избери endpoint за покупка:</p>
+              <select
+                value={selectedEndpoint}
+                onChange={(e) => setSelectedEndpoint(e.target.value)}
+                className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500"
+              >
+                {ENDPOINTS.map((ep) => (
+                  <option key={ep.path} value={ep.path}>{ep.label} — {ep.path}</option>
+                ))}
+              </select>
+            </div>
+
             {/* Payment flow steps indicator */}
             <div className="flex items-center gap-1 text-[10px]">
               {['Свържи', 'Плати', 'Потвърди', 'Данни'].map((label, i) => {
@@ -921,7 +945,7 @@ export default function Home() {
               { path: '/crypto/whale-moves', icon: Fish, label: 'Whale Moves', desc: 'Големи USDC трансфери (>1000 USDC)', color: 'text-red-400' },
               { path: '/crypto/gas-oracle', icon: Fuel, label: 'Gas Oracle', desc: 'Live gas цена на Base мрежата', color: 'text-cyan-400' },
             ].map((ep) => (
-              <div key={ep.path} className="flex items-center gap-3 bg-zinc-950/60 rounded-lg p-3">
+              <button key={ep.path} onClick={() => setSelectedEndpoint(ep.path)} className={`flex items-center gap-3 bg-zinc-950/60 rounded-lg p-3 w-full text-left transition-colors ${selectedEndpoint === ep.path ? 'ring-1 ring-amber-500/50 bg-amber-950/20' : 'hover:bg-zinc-900'}`}>
                 <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
                   <ep.icon className={`w-4 h-4 ${ep.color}`} />
                 </div>
@@ -930,7 +954,7 @@ export default function Home() {
                   <p className="text-[10px] text-zinc-500 truncate">{ep.desc}</p>
                 </div>
                 <p className="text-[10px] font-mono text-zinc-600 shrink-0">GET</p>
-              </div>
+              </button>
             ))}
           </CardContent>
         </Card>
