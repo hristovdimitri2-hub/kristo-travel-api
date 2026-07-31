@@ -2,21 +2,20 @@ services:
   - type: web
     name: kristo-intelligence-api
     runtime: python
+    rootDir: scripts/deploy-ready
     buildCommand: pip install --no-cache-dir -r requirements.txt
     startCommand: uvicorn kristo_api:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
       - key: PORT
-        value: "10000"
+        value: "8000"
       - key: WALLET_ADDRESS
         sync: false
       - key: BASE_RPC_URL
         value: "https://mainnet.base.org"
       - key: PRICE_USDC
-      - key: PRICE_RAW
-        value: "10000"
-        value: "0.01"
+        value: "0.25"
       - key: RATE_LIMIT
         value: "30/minute"
       - key: DB_PATH
@@ -26,3 +25,17 @@ services:
       mountPath: /var/data
       sizeGB: 1
     healthCheckPath: /health
+
+  - type: worker
+    name: kristo-telegram-bot
+    runtime: python
+    rootDir: telegram_bot
+    buildCommand: pip install --no-cache-dir -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: API_BASE
+        value: "https://kristo-intelligence-api.onrender.com"
