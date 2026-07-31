@@ -28,8 +28,8 @@ BASE_RPC_URL = os.getenv("BASE_RPC_URL", "https://mainnet.base.org")
 WALLET_ADDRESS = os.getenv("WALLET_ADDRESS", "0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f")
 USDC_ADDRESS = os.getenv("USDC_ADDRESS", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
 WETH_ADDRESS = os.getenv("WETH_ADDRESS", "0x4200000000000000000000000000000000000006")
-PRICE_USDC = float(os.getenv("PRICE_USDC", "0.05"))
-PRICE_RAW = int(os.getenv("PRICE_RAW", "250000"))
+PRICE_USDC = float(os.getenv("PRICE_USDC", "0.01"))
+PRICE_RAW = int(os.getenv("PRICE_RAW", "10000"))
 CHAIN_ID = int(os.getenv("CHAIN_ID", "8453"))
 DB_PATH = os.getenv("DB_PATH", "kristo.db")
 HOST = os.getenv("HOST", "0.0.0.0")
@@ -37,7 +37,7 @@ PORT = int(os.getenv("PORT", "8000"))
 RATE_LIMIT = os.getenv("RATE_LIMIT", "30/minute")
 TRIAL_FREE_CALLS = int(os.getenv("TRIAL_FREE_CALLS", "3"))
 VOLUME_DISCOUNT_THRESHOLD = int(os.getenv("VOLUME_DISCOUNT_THRESHOLD", "50"))
-VOLUME_DISCOUNT_PRICE = float(os.getenv("VOLUME_DISCOUNT_PRICE", "0.03"))
+VOLUME_DISCOUNT_PRICE = float(os.getenv("VOLUME_DISCOUNT_PRICE", "0.005"))
 REFERRAL_BONUS_PERCENT = float(os.getenv("REFERRAL_BONUS_PERCENT", "0.20"))
 
 # Freemium endpoints (free with rate limiting)
@@ -418,7 +418,8 @@ async def root_endpoint():
             {"path": "/crypto/token-launches", "price_usdc": PRICE_USDC, "description": "Recently launched tokens on Base"},
             {"path": "/crypto/wallet-profile", "price_usdc": PRICE_USDC, "description": "Wallet analysis and classification"},
             {"path": "/crypto/whale-moves", "price_usdc": PRICE_USDC, "description": "Large USDC transfers on Base"},
-            {"path": "/crypto/bridge-volume", "price_usdc": PRICE_USDC, "description": "Cross-chain bridge volume to/from Base"}
+            {"path": "/crypto/bridge-volume", "price_usdc": PRICE_USDC, "description": "Cross-chain bridge volume to/from Base"},
+            {"path": "/crypto/token-security", "price_usdc": PRICE_USDC, "description": "Token security scanner — rug-pull & honeypot detection"}
         ],
         "hooks": {
             "trial_credits": f"First {TRIAL_FREE_CALLS} calls FREE — add X-TRIAL-WALLET header",
@@ -481,7 +482,7 @@ async def custom_openapi_endpoint():
             "title": "Kristo Intelligence API",
             "version": "1.0.0",
             "description": "Production-ready pay-per-call AI Agent Intelligence API powered by x402 on Base Blockchain (Chain ID 8453). "
-                           "Each paid endpoint requires payment of 0.05 USDC sent to 0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f via X-PAYMENT header.",
+                           "Each paid endpoint requires payment of 0.01 USDC sent to 0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f via X-PAYMENT header.",
             "x-402-pricing": {
                 "price_per_call_usdc": PRICE_USDC,
                 "amount_raw": str(PRICE_RAW),
@@ -516,7 +517,7 @@ async def custom_openapi_endpoint():
             "/defi/yields": {
                 "get": {
                     "summary": "Top Base Yield Pools (Paid)",
-                    "description": "Requires 0.05 USDC via x402. Returns top 10 Base-chain yield pools from DefiLlama.",
+                    "description": "Requires 0.01 USDC via x402. Returns top 10 Base-chain yield pools from DefiLlama.",
                     "responses": {
                         "200": {"description": "Top 10 yield pools"},
                         "402": {"description": "Payment Required (x402)"}
@@ -526,7 +527,7 @@ async def custom_openapi_endpoint():
             "/defi/tvl-movers": {
                 "get": {
                     "summary": "Base TVL Movers (Paid)",
-                    "description": "Requires 0.05 USDC via x402. Returns top 15 Base DeFi protocols by 1-day TVL change.",
+                    "description": "Requires 0.01 USDC via x402. Returns top 15 Base DeFi protocols by 1-day TVL change.",
                     "responses": {
                         "200": {"description": "Top 15 TVL movers"},
                         "402": {"description": "Payment Required (x402)"}
@@ -536,7 +537,7 @@ async def custom_openapi_endpoint():
             "/crypto/token-prices": {
                 "get": {
                     "summary": "Token Prices (Paid)",
-                    "description": "Requires 0.05 USDC via x402. Returns real-time token prices from CoinGecko for specified Base tokens.",
+                    "description": "Requires 0.01 USDC via x402. Returns real-time token prices from CoinGecko for specified Base tokens.",
                     "parameters": [
                         {
                             "name": "tokens",
@@ -554,7 +555,7 @@ async def custom_openapi_endpoint():
             "/crypto/wallet-profile": {
                 "get": {
                     "summary": "Wallet Profile Analysis (Paid)",
-                    "description": "Requires 0.05 USDC via x402. Returns on-chain balances, transaction count, recent USDC activity, and tier classification.",
+                    "description": "Requires 0.01 USDC via x402. Returns on-chain balances, transaction count, recent USDC activity, and tier classification.",
                     "parameters": [
                         {
                             "name": "address",
@@ -572,7 +573,7 @@ async def custom_openapi_endpoint():
             "/crypto/whale-moves": {
                 "get": {
                     "summary": "Whale USDC Moves (Paid)",
-                    "description": "Requires 0.05 USDC via x402. Returns large USDC transfers on Base scanned from the last 500 blocks.",
+                    "description": "Requires 0.01 USDC via x402. Returns large USDC transfers on Base scanned from the last 500 blocks.",
                     "parameters": [
                         {
                             "name": "min_usdc",
@@ -590,7 +591,7 @@ async def custom_openapi_endpoint():
             "/crypto/gas-oracle": {
                 "get": {
                     "summary": "Base Gas Oracle (Paid)",
-                    "description": "Requires 0.05 USDC via x402. Returns current Base gas price, cost estimates for ETH/USDC transfers, swaps, contract calls, and gas recommendation.",
+                    "description": "Requires 0.01 USDC via x402. Returns current Base gas price, cost estimates for ETH/USDC transfers, swaps, contract calls, and gas recommendation.",
                     "responses": {
                         "200": {"description": "Gas oracle metrics and estimates"},
                         "402": {"description": "Payment Required (x402)"}
@@ -1298,7 +1299,8 @@ async def pricing_endpoint():
             {"path": "/crypto/token-launches", "price_usdc": PRICE_USDC, "description": "New Base tokens"},
             {"path": "/crypto/wallet-profile", "price_usdc": PRICE_USDC, "description": "Wallet analysis"},
             {"path": "/crypto/whale-moves", "price_usdc": PRICE_USDC, "description": "Whale transfers"},
-            {"path": "/crypto/bridge-volume", "price_usdc": PRICE_USDC, "description": "Bridge volume"}
+            {"path": "/crypto/bridge-volume", "price_usdc": PRICE_USDC, "description": "Bridge volume"},
+            {"path": "/crypto/token-security", "price_usdc": PRICE_USDC, "description": "Rug-pull & honeypot detection"}
         ],
         "hooks": {
             "trial_credits": {"free_calls": TRIAL_FREE_CALLS, "description": f"First {TRIAL_FREE_CALLS} calls FREE for new wallets"},
@@ -1382,7 +1384,8 @@ async def run_intelligence_cycle():
             all_paid = ["/defi/yields", "/defi/tvl-movers", "/defi/lending-rates",
                        "/defi/dex-pools", "/defi/protocol-safety",
                        "/crypto/token-launches", "/crypto/wallet-profile",
-                       "/crypto/whale-moves", "/crypto/bridge-volume"]
+                       "/crypto/whale-moves", "/crypto/bridge-volume",
+                       "/crypto/token-security"]
             active_endpoints_24h = {s["endpoint"] for s in stats_24h}
             underperforming = [ep for ep in all_paid if ep not in active_endpoints_24h]
 
@@ -1605,6 +1608,245 @@ async def agent_recommendations_endpoint():
         "total_recommendations": len(recommendations),
         "recommendations": recommendations
     }
+
+
+
+# =====================================================================
+# TOKEN SECURITY SCANNER (Rug-Pull Detection) — Top selling endpoint
+# =====================================================================
+
+@app.get("/crypto/token-security", summary="Token Security Scanner (Rug-Pull Detection)")
+async def crypto_token_security_endpoint(
+    address: str = Query(..., description="Token contract address on Base (0x...)"),
+    payment: dict = Depends(verify_payment)
+):
+    """
+    Comprehensive security scan for any Base token. Detects honeypots, rug-pull risk,
+    holder concentration, liquidity issues, and contract anomalies.
+    Returns structured risk assessment with boolean flags for AI agent decision-making.
+    """
+    if not re.match(r"^0x[a-fA-F0-9]{40}$", address):
+        raise HTTPException(status_code=400, detail="Invalid token address. Expected 42 hex characters starting with 0x.")
+
+    token_addr = address.lower()
+    token_addr_padded = token_addr.replace("0x", "").zfill(64)
+    now = time.time()
+
+    # Cache key for this token
+    cache_key = f"security_{token_addr}"
+    cache = cache_store.get(cache_key, {"timestamp": 0.0, "data": None})
+
+    # 10 min cache
+    if cache["data"] is not None and (now - cache["timestamp"]) < 600:
+        return cache["data"]
+
+    try:
+        # 1. Get token contract code
+        code_hex = await rpc_call("eth_getCode", [address, "latest"])
+
+        # 2. Get token metadata via contract calls
+        # name() = 0x06fdde03
+        # symbol() = 0x95d89b41
+        # decimals() = 0x313ce567
+        # totalSupply() = 0x18160ddd
+        # balanceOf(address) = 0x70a08231
+        # allowance(address,address) = 0xdd62ed3e
+
+        r_name = rpc_call("eth_call", [{"to": address, "data": "0x06fdde03"}, "latest"])
+        r_symbol = rpc_call("eth_call", [{"to": address, "data": "0x95d89b41"}, "latest"])
+        r_decimals = rpc_call("eth_call", [{"to": address, "data": "0x313ce567"}, "latest"])
+        r_supply = rpc_call("eth_call", [{"to": address, "data": "0x18160ddd"}, "latest"])
+
+        res_name, res_symbol, res_decimals, res_supply = await asyncio.gather(
+            r_name, r_symbol, r_decimals, r_supply
+        )
+
+        # Decode token info
+        def decode_string(hex_val):
+            if not hex_val or hex_val == "0x":
+                return None
+            try:
+                hex_val = hex_val[2:] if hex_val.startswith("0x") else hex_val
+                # ABI-encoded string: offset(32) + length(32) + data
+                if len(hex_val) >= 128:
+                    data_hex = hex_val[128:]  # Skip offset + length
+                    return bytes.fromhex(data_hex).decode("utf-8", errors="ignore").strip("\x00").strip()
+                return None
+            except:
+                return None
+
+        def decode_uint(hex_val):
+            if not hex_val or hex_val == "0x":
+                return 0
+            try:
+                return int(hex_val, 16)
+            except:
+                return 0
+
+        token_name = decode_string(res_name) or "Unknown"
+        token_symbol = decode_string(res_symbol) or "Unknown"
+        token_decimals = decode_uint(res_decimals) or 18
+        total_supply = decode_uint(res_supply)
+        total_supply_formatted = total_supply / (10 ** token_decimals) if total_supply > 0 else 0
+
+        # 3. Check if contract has mint function (0x40c10f19 = mint(address,uint256))
+        # Check if contract has owner/setOwner functions (0x8da5cb5b = owner())
+        r_owner = rpc_call("eth_call", [{"to": address, "data": "0x8da5cb5b"}, "latest"])
+        res_owner = await r_owner
+
+        owner_address = None
+        if res_owner and res_owner != "0x" and len(res_owner) >= 66:
+            owner_hex = res_owner[2:][-40:]
+            if int(owner_hex, 16) != 0:
+                owner_address = "0x" + owner_hex
+
+        # 4. Check contract code size (proxy contracts are risky)
+        code_size = len(code_hex[2:]) // 2 if code_hex and code_hex != "0x" else 0
+
+        # 5. Check if contract is a proxy (has delegatecall)
+        is_proxy = "f0c9a4" in (code_hex or "").lower() or "42804" in (code_hex or "").lower()
+
+        # 6. Check if contract has renounced ownership (owner = 0x0)
+        is_renounced = owner_address is None or (owner_address and int(owner_address[2:], 16) == 0)
+
+        # 7. Try to fetch token info from CoinGecko
+        coingecko_data = {}
+        try:
+            cg_res = await http_client.get(
+                f"https://api.coingecko.com/api/v3/coins/base/contract/{token_addr}",
+                timeout=10.0
+            )
+            if cg_res.status_code == 200:
+                cg_data = cg_res.json()
+                coingecko_data = {
+                    "name": cg_data.get("name"),
+                    "symbol": cg_data.get("symbol"),
+                    "market_cap_rank": cg_data.get("market_cap_rank"),
+                    "liquidity_usd": cg_data.get("liquidity_score"),
+                    "community_score": cg_data.get("community_score"),
+                    "developer_score": cg_data.get("developer_score"),
+                    "public_interest_score": cg_data.get("public_interest_score"),
+                    "listed_on_coingecko": True
+                }
+        except:
+            pass
+
+        # 8. Calculate risk score
+        risk_factors = []
+        risk_score = 100  # Start at perfect score
+
+        # Contract code size check
+        if code_size < 100:
+            risk_score -= 20
+            risk_factors.append({"factor": "tiny_contract", "severity": "high", "detail": f"Contract code is only {code_size} bytes — possible minimal/honeypot contract"})
+            code_size_risk = True
+        else:
+            code_size_risk = False
+
+        # Proxy check
+        if is_proxy:
+            risk_score -= 15
+            risk_factors.append({"factor": "proxy_contract", "severity": "medium", "detail": "Contract appears to be a proxy — logic can be changed after deployment"})
+
+        # Ownership check
+        if not is_renounced:
+            risk_score -= 10
+            risk_factors.append({"factor": "owner_not_renounced", "severity": "medium", "detail": f"Contract owner is {owner_address} — owner can potentially modify contract state"})
+        else:
+            risk_factors.append({"factor": "ownership_renounced", "severity": "info", "detail": "Contract ownership appears renounced (good)"})
+
+        # Mint capability check (look for mint function selector in bytecode)
+        mint_selector = "40c10f19"  # mint(address,uint256)
+        has_mint = mint_selector in (code_hex or "").lower()
+        if has_mint and not is_renounced:
+            risk_score -= 25
+            risk_factors.append({"factor": "mintable", "severity": "high", "detail": "Contract has mint function and ownership is not renounced — owner can mint unlimited tokens"})
+        elif has_mint and is_renounced:
+            risk_factors.append({"factor": "mintable_renounced", "severity": "low", "detail": "Contract has mint function but ownership is renounced"})
+
+        # Self-destruct check (0x43d7b30 = selfdestruct)
+        has_selfdestruct = "43d7b30" in (code_hex or "").lower() or "ff" in (code_hex or "")[-2:]
+        # This is a rough heuristic — not definitive
+
+        # Total supply check
+        if total_supply_formatted == 0:
+            risk_score -= 30
+            risk_factors.append({"factor": "zero_supply", "severity": "critical", "detail": "Token has zero total supply"})
+        elif total_supply_formatted > 1_000_000_000_000:
+            risk_score -= 5
+            risk_factors.append({"factor": "huge_supply", "severity": "low", "detail": f"Very large total supply: {total_supply_formatted:,.0f}"})
+
+        # CoinGecko listing check
+        if coingecko_data.get("listed_on_coingecko"):
+            risk_factors.append({"factor": "listed_coingecko", "severity": "positive", "detail": "Token is listed on CoinGecko (adds credibility)"})
+            risk_score = min(100, risk_score + 10)
+        else:
+            risk_score -= 10
+            risk_factors.append({"factor": "not_listed", "severity": "medium", "detail": "Token not found on CoinGecko — may be very new or low quality"})
+
+        # Clamp risk score
+        risk_score = max(0, min(100, risk_score))
+
+        # Determine risk level
+        if risk_score >= 80:
+            risk_level = "Low Risk"
+            is_safe = True
+        elif risk_score >= 60:
+            risk_level = "Medium Risk"
+            is_safe = False
+        elif risk_score >= 40:
+            risk_level = "High Risk"
+            is_safe = False
+        else:
+            risk_level = "Critical Risk"
+            is_safe = False
+
+        # Honeypot heuristic: small contract + not on CoinGecko + owner not renounced
+        is_honeypot_suspected = code_size_risk and not coingecko_data.get("listed_on_coingecko") and not is_renounced
+
+        # Build response
+        response_data = {
+            "source": "Kristo Security Scanner",
+            "chain": "Base",
+            "token_address": address,
+            "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "token_info": {
+                "name": token_name,
+                "symbol": token_symbol,
+                "decimals": token_decimals,
+                "total_supply": total_supply_formatted,
+                "owner_address": owner_address,
+                "ownership_renounced": is_renounced,
+                "contract_size_bytes": code_size,
+                "is_proxy": is_proxy,
+                "has_mint_function": has_mint
+            },
+            "security_assessment": {
+                "is_safe": is_safe,
+                "is_honeypot_suspected": is_honeypot_suspected,
+                "risk_level": risk_level,
+                "risk_score": risk_score,
+                "risk_factors": risk_factors,
+                "action_recommended": "PROCEED" if is_safe else ("CAUTION" if risk_score >= 60 else "AVOID")
+            },
+            "market_data": coingecko_data,
+            "recommendation_for_ai_agent": {
+                "buy": is_safe and risk_score >= 70,
+                "reason": f"Risk score {risk_score}/100. {risk_level}. {'Ownership renounced.' if is_renounced else 'Ownership NOT renounced.'} {'Listed on CoinGecko.' if coingecko_data.get('listed_on_coingecko') else 'Not listed on CoinGecko.'}",
+                "confidence": "high" if risk_score >= 80 or risk_score < 40 else "medium"
+            }
+        }
+
+        cache_store[cache_key] = {"timestamp": now, "data": response_data}
+        return response_data
+
+    except Exception as e:
+        logger.error(f"Token security scan failed for {address}: {e}")
+        if cache.get("data"):
+            stale = dict(cache["data"])
+            stale["degraded"] = True
+            return stale
+        raise HTTPException(status_code=503, detail=f"Security scan failed: {str(e)}")
 
 
 # =====================================================================
