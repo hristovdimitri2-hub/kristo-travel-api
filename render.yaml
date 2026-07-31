@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: kristo-intelligence-api
+    runtime: python
+    rootDir: scripts/deploy-ready
+    buildCommand: pip install --no-cache-dir -r requirements.txt
+    startCommand: uvicorn kristo_api:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: PORT
+        value: "8000"
+      - key: WALLET_ADDRESS
+        sync: false
+      - key: BASE_RPC_URL
+        value: "https://mainnet.base.org"
+      - key: PRICE_USDC
+        value: "0.25"
+      - key: RATE_LIMIT
+        value: "30/minute"
+      - key: DB_PATH
+        value: "/var/data/kristo.db"
+    disk:
+      name: kristo-data
+      mountPath: /var/data
+      sizeGB: 1
