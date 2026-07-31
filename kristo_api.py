@@ -28,7 +28,7 @@ BASE_RPC_URL = os.getenv("BASE_RPC_URL", "https://mainnet.base.org")
 WALLET_ADDRESS = os.getenv("WALLET_ADDRESS", "0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f")
 USDC_ADDRESS = os.getenv("USDC_ADDRESS", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
 WETH_ADDRESS = os.getenv("WETH_ADDRESS", "0x4200000000000000000000000000000000000006")
-PRICE_USDC = float(os.getenv("PRICE_USDC", "0.25"))
+PRICE_USDC = float(os.getenv("PRICE_USDC", "0.05"))
 PRICE_RAW = int(os.getenv("PRICE_RAW", "250000"))
 CHAIN_ID = int(os.getenv("CHAIN_ID", "8453"))
 DB_PATH = os.getenv("DB_PATH", "kristo.db")
@@ -409,7 +409,7 @@ async def custom_openapi_endpoint():
             "title": "Kristo Intelligence API",
             "version": "1.0.0",
             "description": "Production-ready pay-per-call AI Agent Intelligence API powered by x402 on Base Blockchain (Chain ID 8453). "
-                           "Each paid endpoint requires payment of 0.25 USDC sent to 0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f via X-PAYMENT header.",
+                           "Each paid endpoint requires payment of 0.05 USDC sent to 0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f via X-PAYMENT header.",
             "x-402-pricing": {
                 "price_per_call_usdc": PRICE_USDC,
                 "amount_raw": str(PRICE_RAW),
@@ -444,7 +444,7 @@ async def custom_openapi_endpoint():
             "/defi/yields": {
                 "get": {
                     "summary": "Top Base Yield Pools (Paid)",
-                    "description": "Requires 0.25 USDC via x402. Returns top 10 Base-chain yield pools from DefiLlama.",
+                    "description": "Requires 0.05 USDC via x402. Returns top 10 Base-chain yield pools from DefiLlama.",
                     "responses": {
                         "200": {"description": "Top 10 yield pools"},
                         "402": {"description": "Payment Required (x402)"}
@@ -454,7 +454,7 @@ async def custom_openapi_endpoint():
             "/defi/tvl-movers": {
                 "get": {
                     "summary": "Base TVL Movers (Paid)",
-                    "description": "Requires 0.25 USDC via x402. Returns top 15 Base DeFi protocols by 1-day TVL change.",
+                    "description": "Requires 0.05 USDC via x402. Returns top 15 Base DeFi protocols by 1-day TVL change.",
                     "responses": {
                         "200": {"description": "Top 15 TVL movers"},
                         "402": {"description": "Payment Required (x402)"}
@@ -464,7 +464,7 @@ async def custom_openapi_endpoint():
             "/crypto/token-prices": {
                 "get": {
                     "summary": "Token Prices (Paid)",
-                    "description": "Requires 0.25 USDC via x402. Returns real-time token prices from CoinGecko for specified Base tokens.",
+                    "description": "Requires 0.05 USDC via x402. Returns real-time token prices from CoinGecko for specified Base tokens.",
                     "parameters": [
                         {
                             "name": "tokens",
@@ -482,7 +482,7 @@ async def custom_openapi_endpoint():
             "/crypto/wallet-profile": {
                 "get": {
                     "summary": "Wallet Profile Analysis (Paid)",
-                    "description": "Requires 0.25 USDC via x402. Returns on-chain balances, transaction count, recent USDC activity, and tier classification.",
+                    "description": "Requires 0.05 USDC via x402. Returns on-chain balances, transaction count, recent USDC activity, and tier classification.",
                     "parameters": [
                         {
                             "name": "address",
@@ -500,7 +500,7 @@ async def custom_openapi_endpoint():
             "/crypto/whale-moves": {
                 "get": {
                     "summary": "Whale USDC Moves (Paid)",
-                    "description": "Requires 0.25 USDC via x402. Returns large USDC transfers on Base scanned from the last 500 blocks.",
+                    "description": "Requires 0.05 USDC via x402. Returns large USDC transfers on Base scanned from the last 500 blocks.",
                     "parameters": [
                         {
                             "name": "min_usdc",
@@ -518,7 +518,7 @@ async def custom_openapi_endpoint():
             "/crypto/gas-oracle": {
                 "get": {
                     "summary": "Base Gas Oracle (Paid)",
-                    "description": "Requires 0.25 USDC via x402. Returns current Base gas price, cost estimates for ETH/USDC transfers, swaps, contract calls, and gas recommendation.",
+                    "description": "Requires 0.05 USDC via x402. Returns current Base gas price, cost estimates for ETH/USDC transfers, swaps, contract calls, and gas recommendation.",
                     "responses": {
                         "200": {"description": "Gas oracle metrics and estimates"},
                         "402": {"description": "Payment Required (x402)"}
