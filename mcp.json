@@ -3,7 +3,7 @@
     "kristo-intelligence": {
       "name": "Kristo Intelligence",
       "description": "Pay-per-call DeFi intelligence API for AI agents on Base blockchain. 10 paid endpoints (0.01 USDC/call) including rug-pull detection, yield pools, DEX analytics, and whale tracking. 2 freemium endpoints (token prices, gas oracle). Uses x402 HTTP 402 payment protocol with USDC micropayments.",
-      "version": "2.1.0",
+      "version": "2.2.0",
       "transport": {
         "type": "streamable-http",
         "url": "https://kristo-intelligence-api.onrender.com/mcp"
@@ -13,43 +13,43 @@
           "name": "get_defi_yields",
           "description": "Top 10 Base DeFi yield pools by TVL",
           "paid": true,
-          "price_usdc": 0.01
+          "price_usdc": 0.25
         },
         {
           "name": "get_tvl_movers",
           "description": "Base protocols with biggest 1-day TVL changes",
           "paid": true,
-          "price_usdc": 0.01
+          "price_usdc": 0.25
         },
         {
           "name": "get_lending_rates",
           "description": "Best lending and borrowing rates on Base",
           "paid": true,
-          "price_usdc": 0.01
+          "price_usdc": 0.25
         },
         {
           "name": "get_dex_pools",
           "description": "Top DEX liquidity pools on Base",
           "paid": true,
-          "price_usdc": 0.01
+          "price_usdc": 0.25
         },
         {
           "name": "get_protocol_safety",
           "description": "Risk scores for Base DeFi protocols",
           "paid": true,
-          "price_usdc": 0.01
+          "price_usdc": 0.25
         },
         {
           "name": "get_token_launches",
           "description": "Recently launched tokens on Base",
           "paid": true,
-          "price_usdc": 0.01
+          "price_usdc": 0.25
         },
         {
           "name": "scan_token_security",
           "description": "Rug-pull and honeypot detection scanner",
           "paid": true,
-          "price_usdc": 0.01,
+          "price_usdc": 0.25,
           "inputSchema": {
             "type": "object",
             "properties": {
@@ -59,14 +59,16 @@
                 "description": "Token contract address on Base"
               }
             },
-            "required": ["address"]
+            "required": [
+              "address"
+            ]
           }
         },
         {
           "name": "get_wallet_profile",
           "description": "On-chain wallet analysis and classification",
           "paid": true,
-          "price_usdc": 0.01,
+          "price_usdc": 0.25,
           "inputSchema": {
             "type": "object",
             "properties": {
@@ -76,20 +78,22 @@
                 "description": "Wallet address to analyze"
               }
             },
-            "required": ["address"]
+            "required": [
+              "address"
+            ]
           }
         },
         {
           "name": "get_whale_moves",
           "description": "Large USDC transfers on Base",
           "paid": true,
-          "price_usdc": 0.01
+          "price_usdc": 0.25
         },
         {
           "name": "get_bridge_volume",
           "description": "Cross-chain bridge volume to/from Base",
           "paid": true,
-          "price_usdc": 0.01
+          "price_usdc": 0.25
         },
         {
           "name": "get_token_prices",
@@ -122,7 +126,7 @@
         "network": "base",
         "chain_id": 8453,
         "asset": "USDC",
-        "price_per_call": 0.01,
+        "price_per_call": 0.25,
         "pay_to": "0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f"
       },
       "links": {
