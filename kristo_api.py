@@ -1921,12 +1921,12 @@ async def x402_discovery():
         "chain_id": 8453,
         "asset": "USDC",
         "price_per_call": "0.01",
-        "pay_to": PAYMENT_WALLET,
+        "pay_to": WALLET_ADDRESS,
         "accepts": {
             "amount": "0.01",
             "asset": "USDC",
             "chain": "base",
-            "payTo": PAYMENT_WALLET
+            "payTo": WALLET_ADDRESS
         },
         "paid_endpoints": [
             "/defi/yields", "/defi/tvl-movers", "/defi/lending-rates",
@@ -2005,7 +2005,7 @@ async def agents_json():
             "chain_id": 8453,
             "asset": "USDC",
             "price_per_call": 0.01,
-            "pay_to": PAYMENT_WALLET
+            "pay_to": WALLET_ADDRESS
         },
         "tools": [
             {"name": "defi_yields", "endpoint": "/defi/yields", "paid": True, "price_usdc": 0.01},
