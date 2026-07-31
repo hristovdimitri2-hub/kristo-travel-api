@@ -845,6 +845,28 @@ async def crypto_token_prices_endpoint(
         except Exception as e2:
             logger.error(f"CoinCap fallback also failed: {e2}")
         
+        # Try DexScreener as second fallback for ETH price
+        try:
+            dex_res = await http_client.get(
+                "https://api.dexscreener.com/latest/dex/tokens/0x4200000000000000000000000000000000000006",
+                timeout=8.0
+            )
+            if dex_res.status_code == 200:
+                pairs = dex_res.json().get("pairs", [])
+                if pairs:
+                    eth_price = float(pairs[0].get("priceUsd", 0))
+                    prices_result = [{"symbol": "ETH", "coingecko_id": "ethereum", "price_usd": eth_price, "change_24h": None, "market_cap": None}]
+                    response_data = {
+                        "source": "DexScreener (fallback)",
+                        "count": len(prices_result),
+                        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                        "prices": prices_result,
+                        "note": "Partial data — only ETH price available via DexScreener"
+                    }
+                    return response_data
+        except Exception as e3:
+            logger.error(f"DexScreener fallback also failed: {e3}")
+        
         # Serve stale cache if available
         if cache is not None and cache.get("data") is not None:
             logger.info(f"Serving stale cache for /crypto/token-prices ({cache_key})")
@@ -1884,6 +1906,127 @@ async def crypto_token_security_endpoint(
             return stale
         raise HTTPException(status_code=503, detail=f"Security scan failed: {str(e)}")
 
+
+
+# =====================================================================
+# DISCOVERY & AI AGENT ROUTES
+# =====================================================================
+
+@app.get("/.well-known/x402.json", include_in_schema=False)
+async def x402_discovery():
+    """x402 payment protocol discovery manifest."""
+    return {
+        "version": 1,
+        "network": "base",
+        "chain_id": 8453,
+        "asset": "USDC",
+        "price_per_call": "0.01",
+        "pay_to": PAYMENT_WALLET,
+        "accepts": {
+            "amount": "0.01",
+            "asset": "USDC",
+            "chain": "base",
+            "payTo": PAYMENT_WALLET
+        },
+        "paid_endpoints": [
+            "/defi/yields", "/defi/tvl-movers", "/defi/lending-rates",
+            "/defi/dex-pools", "/defi/protocol-safety", "/crypto/token-launches",
+            "/crypto/token-security", "/crypto/wallet-profile",
+            "/crypto/whale-moves", "/crypto/bridge-volume"
+        ],
+        "free_endpoints": [
+            "/crypto/token-prices", "/crypto/gas-oracle", "/health",
+            "/pricing", "/stats", "/agent/intelligence", "/openapi.json"
+        ],
+        "links": {
+            "openapi": "https://kristo-intelligence-api.onrender.com/openapi.json",
+            "dashboard": "https://kristo-travel-dashboard.vercel.app",
+            "github": "https://github.com/hristovdimitri2-hub/kristo-travel-api"
+        }
+    }
+
+@app.get("/llms.txt", include_in_schema=False)
+async def llms_txt():
+    """Human-readable API description for AI crawlers (llms.txt standard)."""
+    from fastapi.responses import PlainTextResponse
+    txt = """# Kristo Intelligence — Pay-Per-Call DeFi API for AI Agents
+
+## Overview
+Pay-per-call DeFi intelligence API on Base blockchain (Chain ID 8453).
+Uses x402 HTTP 402 Payment Required protocol for micropayments in USDC.
+
+## Base URL
+https://kristo-intelligence-api.onrender.com
+
+## Pricing
+- Paid endpoints: 0.01 USDC per call (USDC on Base mainnet)
+- Freemium: Free with rate limiting (token prices, gas oracle)
+- Trial: First 3 calls free for new wallets
+- Volume: 0.005 USDC/call after 50 paid calls
+
+## Payment Flow
+1. Call a paid endpoint → HTTP 402 with payment details
+2. Send 0.01 USDC to payTo address on Base
+3. Retry with X-PAYMENT header (transaction hash)
+4. Server verifies on-chain, returns data
+
+## Paid Endpoints (0.01 USDC/call)
+- GET /defi/yields — Top 10 Base DeFi yield pools by TVL
+- GET /defi/tvl-movers — Biggest 1-day TVL changes
+- GET /defi/lending-rates — Best lending/borrowing rates (Aave, Moonwell, Morpho)
+- GET /defi/dex-pools — Top DEX pools (Aerodrome, Uniswap v3)
+- GET /defi/protocol-safety — Risk scores for Base protocols
+- GET /crypto/token-launches — Recently launched tokens on Base
+- GET /crypto/token-security?address=0x... — Rug-pull & honeypot detection
+- GET /crypto/wallet-profile?address=0x... — Wallet classification (whale/dolphin/minnow)
+- GET /crypto/whale-moves — Large USDC transfers (>$10,000)
+- GET /crypto/bridge-volume — Cross-chain bridge volume to Base
+
+## Freemium (free, rate-limited)
+- GET /crypto/token-prices?tokens=ETH,USDC — Real-time prices
+- GET /crypto/gas-oracle — Base gas estimates
+
+## Payment Address
+0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f
+"""
+    return PlainTextResponse(txt, media_type="text/plain")
+
+@app.get("/agents.json", include_in_schema=False)
+async def agents_json():
+    """Machine-readable agent capability manifest."""
+    return {
+        "name": "Kristo Intelligence",
+        "version": "2.1.0",
+        "description": "Pay-per-call DeFi intelligence API on Base. 10 paid endpoints (0.01 USDC/call): rug-pull detection, yield pools, DEX analytics, whale tracking, lending rates, bridge volume.",
+        "url": "https://kristo-intelligence-api.onrender.com",
+        "payment": {
+            "protocol": "x402",
+            "network": "base",
+            "chain_id": 8453,
+            "asset": "USDC",
+            "price_per_call": 0.01,
+            "pay_to": PAYMENT_WALLET
+        },
+        "tools": [
+            {"name": "defi_yields", "endpoint": "/defi/yields", "paid": True, "price_usdc": 0.01},
+            {"name": "tvl_movers", "endpoint": "/defi/tvl-movers", "paid": True, "price_usdc": 0.01},
+            {"name": "lending_rates", "endpoint": "/defi/lending-rates", "paid": True, "price_usdc": 0.01},
+            {"name": "dex_pools", "endpoint": "/defi/dex-pools", "paid": True, "price_usdc": 0.01},
+            {"name": "protocol_safety", "endpoint": "/defi/protocol-safety", "paid": True, "price_usdc": 0.01},
+            {"name": "token_launches", "endpoint": "/crypto/token-launches", "paid": True, "price_usdc": 0.01},
+            {"name": "token_security", "endpoint": "/crypto/token-security", "paid": True, "price_usdc": 0.01},
+            {"name": "wallet_profile", "endpoint": "/crypto/wallet-profile", "paid": True, "price_usdc": 0.01},
+            {"name": "whale_moves", "endpoint": "/crypto/whale-moves", "paid": True, "price_usdc": 0.01},
+            {"name": "bridge_volume", "endpoint": "/crypto/bridge-volume", "paid": True, "price_usdc": 0.01},
+            {"name": "token_prices", "endpoint": "/crypto/token-prices", "paid": False},
+            {"name": "gas_oracle", "endpoint": "/crypto/gas-oracle", "paid": False}
+        ],
+        "links": {
+            "openapi": "https://kristo-intelligence-api.onrender.com/openapi.json",
+            "dashboard": "https://kristo-travel-dashboard.vercel.app",
+            "discovery": "https://kristo-intelligence-api.onrender.com/.well-known/x402.json"
+        }
+    }
 
 # =====================================================================
 # MAIN ENTRY POINT
