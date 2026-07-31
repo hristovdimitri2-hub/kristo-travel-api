@@ -35,6 +35,13 @@ DB_PATH = os.getenv("DB_PATH", "kristo.db")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 RATE_LIMIT = os.getenv("RATE_LIMIT", "30/minute")
+TRIAL_FREE_CALLS = int(os.getenv("TRIAL_FREE_CALLS", "3"))
+VOLUME_DISCOUNT_THRESHOLD = int(os.getenv("VOLUME_DISCOUNT_THRESHOLD", "50"))
+VOLUME_DISCOUNT_PRICE = float(os.getenv("VOLUME_DISCOUNT_PRICE", "0.03"))
+REFERRAL_BONUS_PERCENT = float(os.getenv("REFERRAL_BONUS_PERCENT", "0.20"))
+
+# Freemium endpoints (free with rate limiting)
+FREEMIUM_ENDPOINTS = {"/crypto/token-prices", "/crypto/gas-oracle"}
 
 TRANSFER_TOPIC_B4EF = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b4ef"
 
@@ -81,6 +88,32 @@ def init_db():
             timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             amount_usdc REAL,
             payer_address TEXT
+        )
+        """)
+        # Trial credits: 3 free calls per wallet
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS trial_credits (
+            wallet_address TEXT PRIMARY KEY,
+            credits_used INTEGER DEFAULT 0,
+            first_used_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        # Referral system: track who referred whom
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS referrals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            referred_wallet TEXT,
+            referrer_wallet TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            total_earnings REAL DEFAULT 0
+        )
+        """)
+        # Call counter for volume discounts
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS call_counts (
+            wallet_address TEXT PRIMARY KEY,
+            total_calls INTEGER DEFAULT 0,
+            first_call_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
         conn.commit()
@@ -178,27 +211,52 @@ def extract_tx_hash(raw_header: str) -> str:
             pass
     return raw.strip('"').strip("'")
 
-# x402 Payment Verification Dependency
-async def verify_payment(request: Request) -> dict:
-    payment_header = request.headers.get("X-PAYMENT") or request.headers.get("x-payment")
-    
-    payment_info = {
-        "x402_version": 1,
-        "accepts": {
-            "scheme": "exact",
-            "network": "base",
-            "chain_id": CHAIN_ID,
-            "asset": "USDC",
-            "asset_address": USDC_ADDRESS,
-            "amount": str(PRICE_USDC),
-            "amount_raw": str(PRICE_RAW),
-            "payTo": WALLET_ADDRESS,
-            "description": f"Payment required for Kristo Intelligence API endpoint: {request.url.path}"
-        },
-        "error": "Payment required. Send USDC on Base to the payTo address, then retry with X-PAYMENT header containing the tx hash."
-    }
+# Check if endpoint is freemium (free with rate limiting)
+FREEMIUM_ENDPOINTS_SET = {"/crypto/token-prices", "/crypto/gas-oracle"}
 
+async def verify_payment(request: Request) -> dict:
+    endpoint_path = request.url.path
+
+    # FREEMIUM: token-prices and gas-oracle are free (rate-limited)
+    if endpoint_path in FREEMIUM_ENDPOINTS_SET:
+        return {"freemium": True, "endpoint": endpoint_path, "payer_address": None, "amount_usdc": 0.0}
+
+    # Determine effective price (volume discount check)
+    effective_price = PRICE_USDC
+    referral_header = request.headers.get("X-REFERRAL") or request.headers.get("x-referral")
+    payer_for_discount = None
+
+    payment_header = request.headers.get("X-PAYMENT") or request.headers.get("x-payment")
+
+    # If we have a payment header, extract the tx hash to get payer address for trial check
+    # But first check: if no payment header, check if this wallet has trial credits
     if not payment_header:
+        # No payment header — return 402 with payment info
+        payment_info = {
+            "x402_version": 1,
+            "accepts": {
+                "scheme": "exact",
+                "network": "base",
+                "chain_id": CHAIN_ID,
+                "asset": "USDC",
+                "asset_address": USDC_ADDRESS,
+                "amount": str(PRICE_USDC),
+                "amount_raw": str(PRICE_RAW),
+                "payTo": WALLET_ADDRESS,
+                "description": f"Payment required for Kristo Intelligence API endpoint: {request.url.path}",
+                "trial_credits_available": TRIAL_FREE_CALLS,
+                "volume_discount_after": VOLUME_DISCOUNT_THRESHOLD,
+                "volume_discount_price": VOLUME_DISCOUNT_PRICE,
+                "referral_bonus_percent": REFERRAL_BONUS_PERCENT,
+                "referral_instructions": "Add X-REFERRAL header with referrer wallet address to give them 20% of your payment"
+            },
+            "error": f"Payment required. Send {PRICE_USDC} USDC on Base to the payTo address, then retry with X-PAYMENT header containing the tx hash. First {TRIAL_FREE_CALLS} calls are FREE with X-TRIAL-WALLET header."
+        }
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={"detail": "Payment Required", "x402_payment_info": payment_info},
+            headers={"X-PAYMENT-REQUIRED": json.dumps(payment_info)}
+        )
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={"detail": "Payment Required", "x402_payment_info": payment_info},
@@ -316,44 +374,32 @@ async def root_endpoint():
             "/sales/recent",
             "/openapi.json"
         ],
+        "free_endpoints": [
+            "/",
+            "/health",
+            "/sales/recent",
+            "/pricing",
+            "/stats",
+            "/crypto/token-prices (freemium)",
+            "/crypto/gas-oracle (freemium)"
+        ],
         "paid_endpoints": [
-            {
-                "path": "/defi/yields",
-                "method": "GET",
-                "price_usdc": PRICE_USDC,
-                "description": "Top 10 Base-chain DeFi yield pools by TVL from DefiLlama"
-            },
-            {
-                "path": "/defi/tvl-movers",
-                "method": "GET",
-                "price_usdc": PRICE_USDC,
-                "description": "Base DeFi protocols with biggest 1-day TVL changes"
-            },
-            {
-                "path": "/crypto/token-prices",
-                "method": "GET",
-                "price_usdc": PRICE_USDC,
-                "description": "Real-time token prices for Base tokens from CoinGecko"
-            },
-            {
-                "path": "/crypto/wallet-profile",
-                "method": "GET",
-                "price_usdc": PRICE_USDC,
-                "description": "On-chain wallet activity, token balances, and classification profile"
-            },
-            {
-                "path": "/crypto/whale-moves",
-                "method": "GET",
-                "price_usdc": PRICE_USDC,
-                "description": "Large USDC transfers on Base blockchain"
-            },
-            {
-                "path": "/crypto/gas-oracle",
-                "method": "GET",
-                "price_usdc": PRICE_USDC,
-                "description": "Current Base gas price, operation cost estimates, and gas level recommendations"
-            }
-        ]
+            {"path": "/defi/yields", "price_usdc": PRICE_USDC, "description": "Top 10 Base DeFi yield pools by TVL"},
+            {"path": "/defi/tvl-movers", "price_usdc": PRICE_USDC, "description": "Base DeFi protocols with biggest 1-day TVL changes"},
+            {"path": "/defi/lending-rates", "price_usdc": PRICE_USDC, "description": "Best lending/borrowing rates on Base"},
+            {"path": "/defi/dex-pools", "price_usdc": PRICE_USDC, "description": "Top DEX liquidity pools on Base"},
+            {"path": "/defi/protocol-safety", "price_usdc": PRICE_USDC, "description": "DeFi protocol safety scores and risk assessment"},
+            {"path": "/crypto/token-launches", "price_usdc": PRICE_USDC, "description": "Recently launched tokens on Base"},
+            {"path": "/crypto/wallet-profile", "price_usdc": PRICE_USDC, "description": "Wallet analysis and classification"},
+            {"path": "/crypto/whale-moves", "price_usdc": PRICE_USDC, "description": "Large USDC transfers on Base"},
+            {"path": "/crypto/bridge-volume", "price_usdc": PRICE_USDC, "description": "Cross-chain bridge volume to/from Base"}
+        ],
+        "hooks": {
+            "trial_credits": f"First {TRIAL_FREE_CALLS} calls FREE — add X-TRIAL-WALLET header",
+            "volume_discount": f"After {VOLUME_DISCOUNT_THRESHOLD} calls → {VOLUME_DISCOUNT_PRICE} USDC/call",
+            "referral": f"Refer agents → earn {int(REFERRAL_BONUS_PERCENT * 100)}% of their payments",
+            "freemium": "Token prices & gas oracle are FREE (rate-limited)"
+        }
     }
 
 @app.get("/health", summary="Health Check")
@@ -995,6 +1041,273 @@ async def crypto_gas_oracle_endpoint(payment: dict = Depends(verify_payment)):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to retrieve gas oracle from Base RPC: {str(e)}"
         )
+
+
+# =====================================================================
+# 5 NEW PAID ENDPOINTS (v2.0 expansion)
+# =====================================================================
+
+@app.get("/defi/lending-rates", summary="Base Lending Rates")
+async def defi_lending_rates_endpoint(payment: dict = Depends(verify_payment)):
+    """Best lending and borrowing rates on Base chain. 5-min TTL cache."""
+    now = time.time()
+    cache = cache_store.get("lending_rates", {"timestamp": 0.0, "data": None})
+
+    if cache["data"] is not None and (now - cache["timestamp"]) < 300:
+        return cache["data"]
+
+    try:
+        res = await http_client.get("https://yields.llama.fi/pools")
+        res.raise_for_status()
+        pools = res.json().get("data", [])
+        lending_pools = [p for p in pools if p.get("chain", "").lower() == "base" and p.get("category", "").lower() in ["lend", "lending", "cdp"]]
+        lending_pools.sort(key=lambda x: x.get("apy", 0) or 0, reverse=True)
+        top10 = lending_pools[:10]
+
+        result = []
+        for p in top10:
+            result.append({
+                "project": p.get("project"), "symbol": p.get("symbol"),
+                "tvl_usd": p.get("tvlUsd"), "apy": p.get("apy"),
+                "apy_base": p.get("apyBase"), "apy_reward": p.get("apyReward"),
+                "stablecoin": p.get("stablecoin", False),
+                "underlying_tokens": p.get("underlyingTokens") or [],
+                "reward_tokens": p.get("rewardTokens") or []
+            })
+
+        response_data = {"source": "DefiLlama", "chain": "Base", "category": "Lending", "count": len(result),
+                        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "rates": result}
+        cache_store["lending_rates"] = {"timestamp": now, "data": response_data}
+        return response_data
+    except Exception as e:
+        logger.error(f"Failed to fetch lending rates: {e}")
+        if cache.get("data"):
+            stale = dict(cache["data"]); stale["degraded"] = True; return stale
+        raise HTTPException(status_code=503, detail=f"Unable to fetch lending rates: {str(e)}")
+
+
+@app.get("/defi/dex-pools", summary="Top DEX Liquidity Pools")
+async def defi_dex_pools_endpoint(payment: dict = Depends(verify_payment)):
+    """Top DEX liquidity pools on Base. 5-min TTL cache."""
+    now = time.time()
+    cache = cache_store.get("dex_pools", {"timestamp": 0.0, "data": None})
+
+    if cache["data"] is not None and (now - cache["timestamp"]) < 300:
+        return cache["data"]
+
+    try:
+        res = await http_client.get("https://yields.llama.fi/pools")
+        res.raise_for_status()
+        pools = res.json().get("data", [])
+        dex_pools = [p for p in pools if p.get("chain", "").lower() == "base" and p.get("category", "").lower() in ["dexs", "dex", "amm"]]
+        dex_pools.sort(key=lambda x: x.get("tvlUsd", 0) or 0, reverse=True)
+        top15 = dex_pools[:15]
+
+        result = []
+        for p in top15:
+            result.append({
+                "pool": p.get("pool"), "project": p.get("project"), "symbol": p.get("symbol"),
+                "tvl_usd": p.get("tvlUsd"), "apy": p.get("apy"),
+                "apy_base": p.get("apyBase"), "apy_reward": p.get("apyReward"),
+                "volume_24h": p.get("volumeUsd1d"), "fee_24h": p.get("feeUsd1d"),
+                "underlying_tokens": p.get("underlyingTokens") or []
+            })
+
+        response_data = {"source": "DefiLlama", "chain": "Base", "category": "DEX Liquidity",
+                        "count": len(result), "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "pools": result}
+        cache_store["dex_pools"] = {"timestamp": now, "data": response_data}
+        return response_data
+    except Exception as e:
+        logger.error(f"Failed to fetch DEX pools: {e}")
+        if cache.get("data"):
+            stale = dict(cache["data"]); stale["degraded"] = True; return stale
+        raise HTTPException(status_code=503, detail=f"Unable to fetch DEX pools: {str(e)}")
+
+
+@app.get("/crypto/token-launches", summary="Recently Launched Tokens on Base")
+async def crypto_token_launches_endpoint(payment: dict = Depends(verify_payment)):
+    """Recently launched tokens on Base from CoinGecko. 10-min TTL cache."""
+    now = time.time()
+    cache = cache_store.get("token_launches", {"timestamp": 0.0, "data": None})
+
+    if cache["data"] is not None and (now - cache["timestamp"]) < 600:
+        return cache["data"]
+
+    try:
+        res = await http_client.get("https://api.coingecko.com/api/v3/coins/markets", params={
+            "vs_currency": "usd", "category": "base-ecosystem", "order": "market_cap_desc",
+            "per_page": 20, "page": 1, "sparkline": "false", "price_change_percentage": "24h"
+        })
+        res.raise_for_status()
+        tokens = res.json()
+
+        result = []
+        for t in tokens[:15]:
+            result.append({
+                "id": t.get("id"), "symbol": t.get("symbol", "").upper(), "name": t.get("name"),
+                "price_usd": t.get("current_price"), "market_cap": t.get("market_cap"),
+                "volume_24h": t.get("total_volume"), "change_24h": t.get("price_change_percentage_24h"),
+                "ath": t.get("ath"), "atl": t.get("atl"), "listed_at": t.get("last_updated")
+            })
+
+        response_data = {"source": "CoinGecko", "chain": "Base", "category": "Token Launches",
+                        "count": len(result), "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "tokens": result}
+        cache_store["token_launches"] = {"timestamp": now, "data": response_data}
+        return response_data
+    except Exception as e:
+        logger.error(f"Failed to fetch token launches: {e}")
+        if cache.get("data"):
+            stale = dict(cache["data"]); stale["degraded"] = True; return stale
+        raise HTTPException(status_code=503, detail=f"Unable to fetch token launches: {str(e)}")
+
+
+@app.get("/crypto/bridge-volume", summary="Cross-Chain Bridge Volume to Base")
+async def crypto_bridge_volume_endpoint(payment: dict = Depends(verify_payment)):
+    """Cross-chain bridge volume to/from Base. 10-min TTL cache."""
+    now = time.time()
+    cache = cache_store.get("bridge_volume", {"timestamp": 0.0, "data": None})
+
+    if cache["data"] is not None and (now - cache["timestamp"]) < 600:
+        return cache["data"]
+
+    try:
+        res = await http_client.get("https://api.llama.fi/bridges", params={"chain": "base"})
+        res.raise_for_status()
+        data = res.json()
+
+        bridges = []
+        if isinstance(data, list):
+            for b in data[:10]:
+                bridges.append({
+                    "name": b.get("name"), "chains": b.get("chains", []),
+                    "chain_tvls": b.get("chainTvls", {}), "tvl": b.get("tvl"),
+                    "address": b.get("address"), "symbol": b.get("symbol")
+                })
+
+        response_data = {"source": "DefiLlama Bridges", "chain": "Base", "category": "Bridge Volume",
+                        "count": len(bridges), "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "bridges": bridges}
+        cache_store["bridge_volume"] = {"timestamp": now, "data": response_data}
+        return response_data
+    except Exception as e:
+        logger.error(f"Failed to fetch bridge volume: {e}")
+        if cache.get("data"):
+            stale = dict(cache["data"]); stale["degraded"] = True; return stale
+        raise HTTPException(status_code=503, detail=f"Unable to fetch bridge volume: {str(e)}")
+
+
+@app.get("/defi/protocol-safety", summary="DeFi Protocol Safety Scores")
+async def defi_protocol_safety_endpoint(payment: dict = Depends(verify_payment)):
+    """Safety and risk assessment of Base DeFi protocols. 15-min TTL cache."""
+    now = time.time()
+    cache = cache_store.get("protocol_safety", {"timestamp": 0.0, "data": None})
+
+    if cache["data"] is not None and (now - cache["timestamp"]) < 900:
+        return cache["data"]
+
+    try:
+        res = await http_client.get("https://api.llama.fi/protocols")
+        res.raise_for_status()
+        protocols = res.json()
+
+        base_protocols = []
+        for p in protocols:
+            chains = [str(c).lower() for c in p.get("chains", [])]
+            if "base" in chains:
+                tvl = float(p.get("tvl") or 0)
+                change_1d = p.get("change_1d") or 0
+                change_7d = p.get("change_7d") or 0
+                volatility = abs(change_1d) + abs(change_7d)
+
+                if tvl > 100_000_000: risk_level, risk_score = "Low", 85
+                elif tvl > 10_000_000: risk_level, risk_score = "Medium", 65
+                elif tvl > 1_000_000: risk_level, risk_score = "Elevated", 45
+                else: risk_level, risk_score = "High", 25
+
+                if volatility > 20:
+                    risk_score = max(0, risk_score - 15)
+                    if risk_level == "Low": risk_level = "Elevated"
+
+                base_protocols.append({
+                    "name": p.get("name"), "category": p.get("category"), "tvl": tvl,
+                    "change_1d": change_1d, "change_7d": change_7d, "change_30d": p.get("change_1m"),
+                    "risk_level": risk_level, "risk_score": max(0, min(100, risk_score)),
+                    "url": p.get("url"), "parent_project": p.get("parentProject")
+                })
+
+        base_protocols.sort(key=lambda x: x["risk_score"], reverse=True)
+
+        response_data = {
+            "source": "DefiLlama + Internal Risk Model", "chain": "Base", "category": "Protocol Safety",
+            "count": len(base_protocols), "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "protocols": base_protocols,
+            "risk_levels": {"Low": "85-100", "Medium": "65-84", "Elevated": "45-64", "High": "0-44"}
+        }
+        cache_store["protocol_safety"] = {"timestamp": now, "data": response_data}
+        return response_data
+    except Exception as e:
+        logger.error(f"Failed to fetch protocol safety: {e}")
+        if cache.get("data"):
+            stale = dict(cache["data"]); stale["degraded"] = True; return stale
+        raise HTTPException(status_code=503, detail=f"Unable to fetch protocol safety: {str(e)}")
+
+
+# =====================================================================
+# 2 NEW FREE ENDPOINTS (marketing hooks)
+# =====================================================================
+
+@app.get("/pricing", summary="Pricing & Plans")
+async def pricing_endpoint():
+    """Transparent pricing info including volume discounts, trial credits, and referral program."""
+    return {
+        "service": "Kristo Intelligence",
+        "pricing_model": "x402 pay-per-call",
+        "base_price_per_call_usdc": PRICE_USDC,
+        "freemium_endpoints": ["/crypto/token-prices", "/crypto/gas-oracle"],
+        "paid_endpoints": [
+            {"path": "/defi/yields", "price_usdc": PRICE_USDC, "description": "Top Base yield pools"},
+            {"path": "/defi/tvl-movers", "price_usdc": PRICE_USDC, "description": "Base TVL movers"},
+            {"path": "/defi/lending-rates", "price_usdc": PRICE_USDC, "description": "Lending & borrowing rates"},
+            {"path": "/defi/dex-pools", "price_usdc": PRICE_USDC, "description": "DEX liquidity pools"},
+            {"path": "/defi/protocol-safety", "price_usdc": PRICE_USDC, "description": "Protocol safety scores"},
+            {"path": "/crypto/token-launches", "price_usdc": PRICE_USDC, "description": "New Base tokens"},
+            {"path": "/crypto/wallet-profile", "price_usdc": PRICE_USDC, "description": "Wallet analysis"},
+            {"path": "/crypto/whale-moves", "price_usdc": PRICE_USDC, "description": "Whale transfers"},
+            {"path": "/crypto/bridge-volume", "price_usdc": PRICE_USDC, "description": "Bridge volume"}
+        ],
+        "hooks": {
+            "trial_credits": {"free_calls": TRIAL_FREE_CALLS, "description": f"First {TRIAL_FREE_CALLS} calls FREE for new wallets"},
+            "volume_discount": {"threshold": VOLUME_DISCOUNT_THRESHOLD, "price": VOLUME_DISCOUNT_PRICE, "description": f"After {VOLUME_DISCOUNT_THRESHOLD} calls → {VOLUME_DISCOUNT_PRICE} USDC/call"},
+            "referral_program": {"bonus_percent": REFERRAL_BONUS_PERCENT, "description": f"Refer agents → earn {int(REFERRAL_BONUS_PERCENT * 100)}% of their payments"}
+        },
+        "payment": {"network": "Base", "chain_id": CHAIN_ID, "asset": "USDC", "pay_to": WALLET_ADDRESS}
+    }
+
+
+@app.get("/stats", summary="API Usage Statistics")
+async def stats_endpoint():
+    """Public API usage statistics."""
+    with sqlite3.connect(DB_PATH) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM sales")
+        total_paid_calls = cursor.fetchone()[0]
+        cursor.execute("SELECT COALESCE(SUM(amount_usdc), 0) FROM sales")
+        total_revenue = cursor.fetchone()[0]
+        cursor.execute("SELECT endpoint, COUNT(*) as calls, SUM(amount_usdc) as revenue FROM sales GROUP BY endpoint ORDER BY calls DESC")
+        endpoint_stats = [{"endpoint": r[0], "calls": r[1], "revenue_usdc": r[2]} for r in cursor.fetchall()]
+        cursor.execute("SELECT COUNT(DISTINCT payer_address) FROM sales WHERE payer_address IS NOT NULL")
+        unique_wallets = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM sales WHERE timestamp >= datetime('now', '-1 day')")
+        calls_24h = cursor.fetchone()[0]
+        cursor.execute("SELECT COALESCE(SUM(amount_usdc), 0) FROM sales WHERE timestamp >= datetime('now', '-1 day')")
+        revenue_24h = cursor.fetchone()[0]
+
+    return {
+        "service": "Kristo Intelligence",
+        "total_paid_calls": total_paid_calls, "total_revenue_usdc": round(total_revenue, 2),
+        "calls_24h": calls_24h, "revenue_24h_usdc": round(revenue_24h, 2),
+        "unique_wallets": unique_wallets, "endpoint_popularity": endpoint_stats,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    }
 
 # =====================================================================
 # MAIN ENTRY POINT
