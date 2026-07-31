@@ -1,0 +1,43 @@
+{
+  "version": "1.0.0",
+  "name": "Kristo Intelligence",
+  "description": "Pay-per-call DeFi intelligence API for AI agents on Base blockchain. 10 paid endpoints including yield pools, TVL movers, lending rates, DEX pools, protocol safety scores, token launches, token security scanner (rug-pull detection), wallet profiling, whale moves, and bridge volume.",
+  "payment": {
+    "protocol": "x402",
+    "version": 1,
+    "network": "base",
+    "chain_id": 8453,
+    "asset": "USDC",
+    "asset_address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "price_per_call": "0.01",
+    "price_raw": "10000",
+    "pay_to": "0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f"
+  },
+  "endpoints": [
+    { "path": "/defi/yields", "method": "GET", "price": "0.01", "description": "Top Base DeFi yield pools" },
+    { "path": "/defi/tvl-movers", "method": "GET", "price": "0.01", "description": "Base TVL movers" },
+    { "path": "/defi/lending-rates", "method": "GET", "price": "0.01", "description": "Best lending/borrowing rates on Base" },
+    { "path": "/defi/dex-pools", "method": "GET", "price": "0.01", "description": "Top DEX liquidity pools" },
+    { "path": "/defi/protocol-safety", "method": "GET", "price": "0.01", "description": "DeFi protocol safety scores" },
+    { "path": "/crypto/token-launches", "method": "GET", "price": "0.01", "description": "Recently launched Base tokens" },
+    { "path": "/crypto/token-security", "method": "GET", "price": "0.01", "description": "Token security scanner — rug-pull & honeypot detection" },
+    { "path": "/crypto/wallet-profile", "method": "GET", "price": "0.01", "description": "On-chain wallet analysis" },
+    { "path": "/crypto/whale-moves", "method": "GET", "price": "0.01", "description": "Large USDC transfers on Base" },
+    { "path": "/crypto/bridge-volume", "method": "GET", "price": "0.01", "description": "Cross-chain bridge volume" }
+  ],
+  "freemium_endpoints": [
+    { "path": "/crypto/token-prices", "method": "GET", "price": "free", "description": "Real-time token prices from CoinGecko" },
+    { "path": "/crypto/gas-oracle", "method": "GET", "price": "free", "description": "Base gas price estimates" }
+  ],
+  "hooks": {
+    "trial_credits": 3,
+    "volume_discount": { "threshold": 50, "price": "0.005" },
+    "referral_bonus_percent": 20
+  },
+  "links": {
+    "api": "https://kristo-intelligence-api.onrender.com",
+    "dashboard": "https://kristo-travel-dashboard.vercel.app",
+    "github": "https://github.com/hristovdimitri2-hub/kristo-travel-api",
+    "openapi": "https://kristo-intelligence-api.onrender.com/openapi.json"
+  }
+}
