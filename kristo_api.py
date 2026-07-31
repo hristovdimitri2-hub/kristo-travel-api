@@ -116,6 +116,29 @@ def init_db():
             first_call_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
+        # Intelligence engine: stores analysis reports and pricing decisions
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS intelligence_reports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_type TEXT,
+            analysis TEXT,
+            recommendations TEXT,
+            pricing_changes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        # Dynamic pricing per endpoint
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dynamic_pricing (
+            endpoint TEXT PRIMARY KEY,
+            current_price REAL,
+            base_price REAL,
+            last_adjusted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            adjustment_reason TEXT,
+            calls_24h INTEGER DEFAULT 0,
+            calls_7d INTEGER DEFAULT 0
+        )
+        """)
         conn.commit()
     logger.info(f"Database initialized at {DB_PATH}")
 
@@ -168,6 +191,9 @@ async def startup_event():
     init_db()
     print_config()
     http_client = httpx.AsyncClient(timeout=15.0)
+    # Start the autonomous intelligence engine
+    asyncio.create_task(intelligence_scheduler())
+    logger.info("🧠 Autonomous Intelligence Engine started — runs every hour")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -1308,6 +1334,278 @@ async def stats_endpoint():
         "unique_wallets": unique_wallets, "endpoint_popularity": endpoint_stats,
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     }
+
+
+# =====================================================================
+# AUTONOMOUS INTELLIGENCE ENGINE
+# =====================================================================
+
+async def run_intelligence_cycle():
+    """
+    Background intelligence cycle that runs every hour.
+    Analyzes sales patterns, market conditions, and makes pricing decisions.
+    """
+    logger.info("🧠 Intelligence cycle started...")
+
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # 1. Analyze endpoint popularity (last 24h and 7d)
+            cursor.execute("""
+                SELECT endpoint,
+                    COUNT(*) as calls,
+                    SUM(amount_usdc) as revenue
+                FROM sales
+                WHERE timestamp >= datetime('now', '-1 day')
+                GROUP BY endpoint ORDER BY calls DESC
+            """)
+            stats_24h = [dict(r) for r in cursor.fetchall()]
+
+            cursor.execute("""
+                SELECT endpoint,
+                    COUNT(*) as calls,
+                    SUM(amount_usdc) as revenue
+                FROM sales
+                WHERE timestamp >= datetime('now', '-7 days')
+                GROUP BY endpoint ORDER BY calls DESC
+            """)
+            stats_7d = [dict(r) for r in cursor.fetchall()]
+
+            # 2. Identify top performing endpoints
+            top_endpoints = sorted(stats_24h, key=lambda x: x["revenue"] or 0, reverse=True)
+            top_endpoint = top_endpoints[0]["endpoint"] if top_endpoints else None
+            top_revenue = top_endpoints[0]["revenue"] if top_endpoints else 0
+
+            # 3. Identify underperforming endpoints
+            all_paid = ["/defi/yields", "/defi/tvl-movers", "/defi/lending-rates",
+                       "/defi/dex-pools", "/defi/protocol-safety",
+                       "/crypto/token-launches", "/crypto/wallet-profile",
+                       "/crypto/whale-moves", "/crypto/bridge-volume"]
+            active_endpoints_24h = {s["endpoint"] for s in stats_24h}
+            underperforming = [ep for ep in all_paid if ep not in active_endpoints_24h]
+
+            # 4. Calculate total revenue and calls
+            cursor.execute("SELECT COUNT(*) as total, COALESCE(SUM(amount_usdc), 0) as revenue FROM sales WHERE timestamp >= datetime('now', '-1 day')")
+            row = cursor.fetchone()
+            total_calls_24h = row["total"]
+            total_revenue_24h = row["revenue"]
+
+            cursor.execute("SELECT COUNT(DISTINCT payer_address) as wallets FROM sales WHERE timestamp >= datetime('now', '-7 days' AND payer_address IS NOT NULL)")
+            unique_wallets = cursor.fetchone()["wallets"] if cursor.fetchone() else 0
+
+            # 5. Dynamic pricing decisions
+            pricing_changes = []
+            for ep_stats in stats_24h:
+                ep = ep_stats["endpoint"]
+                calls = ep_stats["calls"]
+                revenue = ep_stats["revenue"] or 0
+
+                # High demand (>20 calls/day) → increase price by 20%
+                if calls > 20:
+                    new_price = round(PRICE_USDC * 1.2, 4)
+                    pricing_changes.append({
+                        "endpoint": ep, "action": "increase",
+                        "from": PRICE_USDC, "to": new_price,
+                        "reason": f"High demand: {calls} calls in 24h"
+                    })
+                # Low demand (1-3 calls) → decrease price by 20%
+                elif calls <= 3 and calls > 0:
+                    new_price = round(PRICE_USDC * 0.8, 4)
+                    pricing_changes.append({
+                        "endpoint": ep, "action": "decrease",
+                        "from": PRICE_USDC, "to": new_price,
+                        "reason": f"Low demand: only {calls} calls in 24h"
+                    })
+
+            # 6. Market trend analysis (check CoinGecko for trending Base tokens)
+            market_trends = []
+            try:
+                res = await http_client.get(
+                    "https://api.coingecko.com/api/v3/search/trending",
+                    timeout=10.0
+                )
+                if res.status_code == 200:
+                    trending = res.json().get("coins", [])
+                    base_trending = []
+                    for c in trending[:10]:
+                        item = c.get("item", {})
+                        base_trending.append({
+                            "id": item.get("id"),
+                            "name": item.get("name"),
+                            "symbol": item.get("symbol"),
+                            "market_cap_rank": item.get("market_cap_rank")
+                        })
+                    market_trends = base_trending
+            except Exception as e:
+                logger.warning(f"Market trend fetch failed: {e}")
+
+            # 7. Generate recommendations
+            recommendations = []
+
+            # Recommend new endpoints based on performance
+            if top_endpoint and top_revenue > 0:
+                recommendations.append({
+                    "type": "double_down",
+                    "message": f"Top performer is {top_endpoint} (${top_revenue} USDC in 24h). Consider adding a premium variant with more detailed data.",
+                    "priority": "high"
+                })
+
+            if underperforming:
+                recommendations.append({
+                    "type": "promote_underperforming",
+                    "message": f"Endpoints with zero sales in 24h: {', '.join(underperforming)}. Consider making them freemium or bundling with popular endpoints.",
+                    "priority": "medium"
+                })
+
+            # Recommend based on market trends
+            if market_trends:
+                trending_names = [t["symbol"] for t in market_trends[:3]]
+                recommendations.append({
+                    "type": "market_trend",
+                    "message": f"Trending tokens on CoinGecko: {', '.join(trending_names)}. Consider adding token-specific endpoints for these trending tokens.",
+                    "priority": "high"
+                })
+
+            # Revenue optimization
+            if total_revenue_24h > 0 and total_calls_24h > 0:
+                avg_revenue_per_call = total_revenue_24h / total_calls_24h
+                recommendations.append({
+                    "type": "revenue_optimization",
+                    "message": f"Average revenue per call: ${avg_revenue_per_call:.4f} USDC. Total 24h: ${total_revenue_24h:.2f} USDC from {total_calls_24h} calls. If demand grows 10x, daily revenue would be ${total_revenue_24h * 10:.2f} USDC.",
+                    "priority": "info"
+                })
+            else:
+                recommendations.append({
+                    "type": "growth_needed",
+                    "message": "No sales in the last 24h. Focus on listing the API in x402 directories and marketing to AI agent developers.",
+                    "priority": "high"
+                })
+
+            # 8. Store the report in SQLite
+            report = {
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "stats_24h": {
+                    "total_calls": total_calls_24h,
+                    "total_revenue_usdc": round(total_revenue_24h, 4),
+                    "top_endpoint": top_endpoint,
+                    "top_revenue_usdc": round(top_revenue or 0, 4),
+                    "endpoint_breakdown": stats_24h
+                },
+                "underperforming_endpoints": underperforming,
+                "market_trends": market_trends,
+                "pricing_changes": pricing_changes,
+                "recommendations": recommendations,
+                "total_endpoints": len(all_paid),
+                "active_endpoints_24h": len(active_endpoints_24h)
+            }
+
+            cursor.execute(
+                "INSERT INTO intelligence_reports (report_type, analysis, recommendations, pricing_changes) VALUES (?, ?, ?, ?)",
+                ("hourly", json.dumps(report), json.dumps(recommendations), json.dumps(pricing_changes))
+            )
+            conn.commit()
+
+            # 9. Apply dynamic pricing changes (log them, don't auto-apply for safety)
+            for change in pricing_changes:
+                cursor.execute(
+                    """INSERT OR REPLACE INTO dynamic_pricing
+                    (endpoint, current_price, base_price, last_adjusted_at, adjustment_reason, calls_24h, calls_7d)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (change["endpoint"], change["to"], PRICE_USDC,
+                     time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                     change["reason"],
+                     next((s["calls"] for s in stats_24h if s["endpoint"] == change["endpoint"]), 0),
+                     next((s["calls"] for s in stats_7d if s["endpoint"] == change["endpoint"]), 0))
+                )
+            conn.commit()
+
+            logger.info(f"🧠 Intelligence cycle complete. {len(recommendations)} recommendations, {len(pricing_changes)} pricing adjustments.")
+
+    except Exception as e:
+        logger.error(f"Intelligence cycle error: {e}")
+
+
+async def intelligence_scheduler():
+    """Runs the intelligence cycle every hour."""
+    # Wait 60 seconds after startup before first run
+    await asyncio.sleep(60)
+    while True:
+        await run_intelligence_cycle()
+        # Run every hour (3600 seconds)
+        await asyncio.sleep(3600)
+
+
+@app.get("/agent/intelligence", summary="Autonomous Intelligence Report")
+async def intelligence_report_endpoint():
+    """
+    Returns the latest autonomous intelligence analysis — sales patterns,
+    market trends, pricing recommendations, and growth opportunities.
+    The intelligence engine runs every hour automatically.
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Get latest report
+        cursor.execute("SELECT * FROM intelligence_reports ORDER BY id DESC LIMIT 1")
+        row = cursor.fetchone()
+
+        latest_report = None
+        if row:
+            latest_report = {
+                "id": row["id"],
+                "created_at": row["created_at"],
+                "analysis": json.loads(row["analysis"]) if row["analysis"] else None,
+                "recommendations": json.loads(row["recommendations"]) if row["recommendations"] else [],
+                "pricing_changes": json.loads(row["pricing_changes"]) if row["pricing_changes"] else []
+            }
+
+        # Get report count
+        cursor.execute("SELECT COUNT(*) FROM intelligence_reports")
+        total_reports = cursor.fetchone()[0]
+
+        # Get pricing history
+        cursor.execute("SELECT * FROM dynamic_pricing ORDER BY last_adjusted_at DESC")
+        pricing_rows = cursor.fetchall()
+        pricing_data = [dict(r) for r in pricing_rows]
+
+    return {
+        "service": "Kristo Intelligence — Autonomous Engine",
+        "engine_status": "active" if latest_report else "warming_up",
+        "total_reports": total_reports,
+        "latest_report": latest_report,
+        "dynamic_pricing": pricing_data,
+        "next_cycle_in": "Every hour automatically"
+    }
+
+
+@app.get("/agent/recommendations", summary="AI Recommendations")
+async def agent_recommendations_endpoint():
+    """
+    Returns just the latest AI-generated recommendations — actionable insights
+    for the API owner about what to add, change, or promote.
+    """
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT recommendations, created_at FROM intelligence_reports ORDER BY id DESC LIMIT 5")
+        rows = cursor.fetchall()
+
+    recommendations = []
+    for r in rows:
+        recs = json.loads(r["recommendations"]) if r["recommendations"] else []
+        for rec in recs:
+            rec["report_time"] = r["created_at"]
+            recommendations.append(rec)
+
+    return {
+        "service": "Kristo Intelligence",
+        "total_recommendations": len(recommendations),
+        "recommendations": recommendations
+    }
+
 
 # =====================================================================
 # MAIN ENTRY POINT
