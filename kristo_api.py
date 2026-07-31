@@ -810,6 +810,42 @@ async def crypto_token_prices_endpoint(
 
     except Exception as e:
         logger.error(f"Failed to fetch CoinGecko token prices: {e}")
+        
+        # Try CoinCap as fallback
+        try:
+            symbol_map = {"ETH": "ethereum", "USDC": "usd-coin", "WETH": "weth",
+                         "BASE": "base-protocol", "DAI": "dai", "WBTC": "wrapped-bitcoin",
+                         "AERO": "aerodrome-finance", "BRETT": "brett", "DEGEN": "degen",
+                         "LDO": "lido-dao", "UNI": "uniswap", "LINK": "chainlink"}
+            
+            coincap_ids = [symbol_map.get(s, s.lower()) for s in requested_symbols]
+            cc_res = await http_client.get(
+                f"https://api.coincap.io/v2/assets?ids={','.join(coincap_ids)}",
+                timeout=10.0
+            )
+            if cc_res.status_code == 200:
+                cc_data = cc_res.json().get("data", [])
+                prices_result = []
+                for item in cc_data:
+                    prices_result.append({
+                        "symbol": item.get("symbol", ""),
+                        "coingecko_id": item.get("id", ""),
+                        "price_usd": float(item.get("priceUsd", 0)),
+                        "change_24h": float(item.get("changePercent24Hr", 0)),
+                        "market_cap": float(item.get("marketCapUsd", 0))
+                    })
+                response_data = {
+                    "source": "CoinCap (fallback)",
+                    "count": len(prices_result),
+                    "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "prices": prices_result
+                }
+                cache_store["token_prices"][cache_key] = {"timestamp": now, "data": response_data}
+                return response_data
+        except Exception as e2:
+            logger.error(f"CoinCap fallback also failed: {e2}")
+        
+        # Serve stale cache if available
         if cache is not None and cache.get("data") is not None:
             logger.info(f"Serving stale cache for /crypto/token-prices ({cache_key})")
             stale_data = dict(cache["data"])
@@ -818,7 +854,7 @@ async def crypto_token_prices_endpoint(
             return stale_data
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Unable to fetch token prices from CoinGecko: {str(e)}"
+            detail=f"Unable to fetch token prices: CoinGecko={str(e)}"
         )
 
 @app.get("/crypto/wallet-profile", summary="Wallet Profile Analysis")
