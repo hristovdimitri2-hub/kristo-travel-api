@@ -14,7 +14,9 @@ services:
       - key: BASE_RPC_URL
         value: "https://mainnet.base.org"
       - key: PRICE_USDC
-        value: "0.05"
+      - key: PRICE_RAW
+        value: "10000"
+        value: "0.01"
       - key: RATE_LIMIT
         value: "30/minute"
       - key: DB_PATH
