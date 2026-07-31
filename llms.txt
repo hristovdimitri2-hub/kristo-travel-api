@@ -1,0 +1,102 @@
+# Kristo Intelligence — Pay-Per-Call DeFi API for AI Agents
+
+## Overview
+Kristo Intelligence is a pay-per-call API service that provides DeFi intelligence for AI agents on Base blockchain (Chain ID 8453). Uses the x402 HTTP 402 Payment Required protocol for micropayments in USDC.
+
+## Base URL
+https://kristo-intelligence-api.onrender.com
+
+## Pricing
+- Paid endpoints: 0.01 USDC per call (USDC on Base mainnet)
+- Freemium endpoints: Free with rate limiting (token prices, gas oracle)
+- Free endpoints: Metadata, health, pricing, stats, intelligence reports
+- Trial: First 3 calls free for new wallets
+- Volume discount: 0.005 USDC/call after 50 paid calls
+- Referral: 20% of payment goes to referring agent
+
+## Payment Flow
+1. Agent calls a paid endpoint without payment → receives HTTP 402 with payment details
+2. Payment details include: amount (0.01 USDC), chain (Base 8453), payTo wallet address
+3. Agent sends 0.01 USDC to the payTo address on Base
+4. Agent retries the call with X-PAYMENT header containing the transaction hash
+5. Server verifies on-chain payment and returns the data
+
+## Paid Endpoints (0.01 USDC/call)
+
+### GET /defi/yields
+Top 10 Base DeFi yield pools by TVL. Returns pool name, protocol, TVL, APY, and token pairs.
+
+### GET /defi/tvl-movers
+Base protocols with biggest 1-day TVL changes. Returns protocol name, TVL, 24h change percentage, and category.
+
+### GET /defi/lending-rates
+Best lending and borrowing rates on Base (Aave v3, Moonwell, Morpho). Returns asset, supply APY, borrow APY, and protocol.
+
+### GET /defi/dex-pools
+Top DEX liquidity pools on Base (Aerodrome, Uniswap v3). Returns pair, DEX, TVL, volume, and fees.
+
+### GET /defi/protocol-safety
+Risk scores for Base DeFi protocols. Returns protocol, risk score (0-100), risk level, and audit status.
+
+### GET /crypto/token-launches
+Recently launched tokens on Base. Returns token address, name, symbol, launch date, and initial liquidity.
+
+### GET /crypto/token-security
+Rug-pull and honeypot detection scanner. Parameters: address (token contract address on Base). Returns is_safe, is_honeypot_suspected, risk_score (0-100), risk_level, risk_factors, and buy/avoid recommendation.
+
+### GET /crypto/wallet-profile
+On-chain wallet analysis and classification. Parameters: address (wallet address). Returns balance, transaction count, first/last activity, DeFi activity, and classification (whale/dolphin/minnow/OG/new).
+
+### GET /crypto/whale-moves
+Large USDC transfers on Base. Returns recent transfers over $10,000 with from/to addresses, amount, and transaction hash.
+
+### GET /crypto/bridge-volume
+Cross-chain bridge volume to/from Base. Returns total volume, chain breakdown, and bridge protocol data.
+
+## Freemium Endpoints (free with rate limiting)
+
+### GET /crypto/token-prices
+Real-time token prices. Parameters: tokens (comma-separated symbols). Returns price, 24h change, and market cap. Falls back to CoinCap when CoinGecko is rate-limited.
+
+### GET /crypto/gas-oracle
+Base gas price estimates. Returns current gas price in gwei and wei, plus estimated costs for common transaction types.
+
+## Free Endpoints
+
+### GET /
+Service metadata, endpoint roster, and payment information.
+
+### GET /health
+API health check with Web3 connectivity status and latest block number.
+
+### GET /pricing
+Detailed pricing information with all hooks (trial, volume discount, referral).
+
+### GET /stats
+Public usage statistics (total calls, revenue, unique wallets).
+
+### GET /agent/intelligence
+Autonomous intelligence report — sales analysis, market trends, pricing recommendations.
+
+### GET /agent/recommendations
+Latest AI-generated recommendations for the API owner.
+
+### GET /sales/recent
+Recent sales log (last 20 transactions).
+
+### GET /openapi.json
+OpenAPI 3.0 specification for the entire API.
+
+## Payment Address
+Send USDC on Base to: 0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f
+
+## Discovery
+- x402 manifest: https://kristo-intelligence-api.onrender.com/.well-known/x402.json
+- OpenAPI spec: https://kristo-intelligence-api.onrender.com/openapi.json
+- Dashboard: https://kristo-travel-dashboard.vercel.app
+- GitHub: https://github.com/hristovdimitri2-hub/kristo-travel-api
+
+## Network
+- Chain: Base Mainnet
+- Chain ID: 8453
+- Payment token: USDC (0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)
