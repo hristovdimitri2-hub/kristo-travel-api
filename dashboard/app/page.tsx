@@ -62,11 +62,15 @@ interface X402Challenge {
 
 interface HealthResponse {
   status: string;
-  web3_connected: boolean;
-  wallet: string;
-  network: string;
-  rpc: string;
-  block: number;
+  web3_status?: string;
+  web3_connected?: boolean;
+  wallet_address?: string;
+  wallet?: string;
+  network?: string;
+  rpc_url?: string;
+  rpc?: string;
+  current_block_number?: number;
+  block?: number;
 }
 
 interface SalesItem {
@@ -673,9 +677,9 @@ export default function KristoDashboard() {
             <div className="flex items-center gap-3">
               {/* API Health Pill */}
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs">
-                <span className={`w-2 h-2 rounded-full ${healthData?.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
+                <span className={`w-2 h-2 rounded-full ${healthData?.status === 'ok' || healthData?.status === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'}`} />
                 <span className="font-medium text-slate-300">
-                  {healthData?.status === 'online' ? 'API Online' : healthLoading ? 'Checking...' : 'API Offline'}
+                  {healthData?.status === 'ok' || healthData?.status === 'online' ? 'API Online' : healthLoading ? 'Checking...' : 'API Offline'}
                 </span>
                 {apiLatency !== null && (
                   <span className="text-slate-500 border-l border-slate-800 pl-2 font-mono">
@@ -772,7 +776,7 @@ export default function KristoDashboard() {
               <div>
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Latest Block</p>
                 <p className="text-lg font-bold text-slate-100 font-mono mt-1">
-                  {healthData?.block ? `#${healthData.block.toLocaleString()}` : 'Syncing...'}
+                  {healthData?.current_block_number || healthData?.block ? `#${(healthData.current_block_number || healthData.block || 0).toLocaleString()}` : 'Syncing...'}
                 </p>
                 <p className="text-xs text-emerald-400 mt-0.5 flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3" /> Web3 Connected
