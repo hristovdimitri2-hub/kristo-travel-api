@@ -39,7 +39,7 @@ import { ethers } from 'ethers';
 const DEFAULT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://kristo-intelligence-api.onrender.com';
 const USDC_CONTRACT_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const API_WALLET_ADDRESS = '0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f';
-const PRICE_USDC = '0.01';
+const PRICE_USDC = '0.10';
 const BASE_CHAIN_ID = 8453;
 const BASE_CHAIN_ID_HEX = '0x2105';
 
@@ -529,7 +529,7 @@ export default function KristoDashboard() {
         setX402Challenge(data);
         setEndpointError((prev) => ({
           ...prev,
-          [endpointPath]: data.error || 'Payment required (0.25 USDC on Base)',
+          [endpointPath]: data.error || 'Payment required (0.10 USDC on Base)',
         }));
       } else if (!res.ok) {
         setEndpointError((prev) => ({
@@ -553,7 +553,7 @@ export default function KristoDashboard() {
     }
   };
 
-  // 4. Payment Flow Tester: Send 0.25 USDC & Fetch Endpoint
+  // 4. Payment Flow Tester: Send 0.10 USDC & Fetch Endpoint
   const sendUsdcPayment = async (targetEndpoint: string = selectedEndpoint) => {
     if (!account) {
       setWalletError('Please connect your wallet first.');
@@ -585,7 +585,7 @@ export default function KristoDashboard() {
       const requiredAmount = ethers.parseUnits(PRICE_USDC, 6); // 250000
 
       if (rawBalance < requiredAmount) {
-        throw new Error(`Insufficient USDC on Base. You need at least 0.25 USDC. Current balance: ${ethers.formatUnits(rawBalance, 6)} USDC`);
+        throw new Error(`Insufficient USDC on Base. You need at least 0.10 USDC. Current balance: ${ethers.formatUnits(rawBalance, 6)} USDC`);
       }
 
       // Execute USDC Transfer
@@ -757,7 +757,7 @@ export default function KristoDashboard() {
               <div>
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">x402 Cost Per Call</p>
                 <div className="flex items-center gap-2 mt-1">
-                  <p className="text-lg font-bold text-cyan-400">0.25 USDC</p>
+                  <p className="text-lg font-bold text-cyan-400">0.10 USDC</p>
                   <span className="text-xs text-slate-400 font-mono">(250,000 raw)</span>
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">Pay-per-call on Base</p>
@@ -991,7 +991,7 @@ export default function KristoDashboard() {
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-emerald-500 hover:from-amber-400 hover:to-emerald-400 text-slate-950 font-bold text-xs shadow-md transition-all disabled:opacity-50"
                   >
                     <Zap className="w-3.5 h-3.5 text-slate-950 fill-slate-950" />
-                    {isSendingTx ? 'Processing Tx...' : 'Pay 0.25 USDC & Fetch'}
+                    {isSendingTx ? 'Processing Tx...' : 'Pay 0.10 USDC & Fetch'}
                   </button>
                 </div>
               </div>
@@ -1004,7 +1004,7 @@ export default function KristoDashboard() {
                       <Lock className="w-4 h-4 text-amber-400" />
                       <span className="font-bold text-amber-300">x402 Payment Required</span>
                     </div>
-                    <span className="text-amber-400 font-mono">0.25 USDC on Base</span>
+                    <span className="text-amber-400 font-mono">0.10 USDC on Base</span>
                   </div>
                   <p className="text-slate-300">{endpointError[selectedEndpoint]}</p>
 
@@ -1052,7 +1052,7 @@ export default function KristoDashboard() {
                           <>
                             <span className="w-2 h-2 rounded-full bg-amber-400" />
                             <span className="font-medium text-amber-300">Interactive Preview Mode</span>
-                            <span className="text-slate-500">(Connect wallet & send 0.25 USDC to verify live backend)</span>
+                            <span className="text-slate-500">(Connect wallet & send 0.10 USDC to verify live backend)</span>
                           </>
                         )}
                       </div>
@@ -1475,7 +1475,7 @@ export default function KristoDashboard() {
                     x402 Protocol Payment Sandbox
                   </h2>
                   <p className="text-xs text-slate-400 mt-1">
-                    Test the complete x402 payment cycle: receive a 402 Payment Challenge, execute a 0.25 USDC transfer on Base, and retry with the transaction hash in the X-PAYMENT header.
+                    Test the complete x402 payment cycle: receive a 402 Payment Challenge, execute a 0.10 USDC transfer on Base, and retry with the transaction hash in the X-PAYMENT header.
                   </p>
                 </div>
 
@@ -1488,7 +1488,7 @@ export default function KristoDashboard() {
                       Connect & Check Base
                     </div>
                     <p className="text-xs text-slate-400">
-                      Ensure wallet is connected to Base Mainnet (Chain ID 8453) with at least 0.25 USDC balance.
+                      Ensure wallet is connected to Base Mainnet (Chain ID 8453) with at least 0.10 USDC balance.
                     </p>
                     <div className="pt-2">
                       {!account ? (
@@ -1510,10 +1510,10 @@ export default function KristoDashboard() {
                   <div className="p-4 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
                     <div className="flex items-center gap-2 font-bold text-xs text-amber-400">
                       <span className="w-5 h-5 rounded-full bg-amber-500/20 flex items-center justify-center">2</span>
-                      Send 0.25 USDC
+                      Send 0.10 USDC
                     </div>
                     <p className="text-xs text-slate-400">
-                      Transfers 0.25 USDC directly to API Wallet <span className="font-mono text-slate-300">{API_WALLET_ADDRESS.substring(0, 6)}...</span>
+                      Transfers 0.10 USDC directly to API Wallet <span className="font-mono text-slate-300">{API_WALLET_ADDRESS.substring(0, 6)}...</span>
                     </p>
                     <div className="pt-2">
                       <button
@@ -1521,7 +1521,7 @@ export default function KristoDashboard() {
                         disabled={!account || isSendingTx}
                         className="w-full py-2 rounded-lg bg-gradient-to-r from-amber-500 to-emerald-500 text-slate-950 font-bold text-xs hover:from-amber-400 hover:to-emerald-400 transition-colors disabled:opacity-50"
                       >
-                        {isSendingTx ? 'Processing Tx...' : 'Send 0.25 USDC Payment'}
+                        {isSendingTx ? 'Processing Tx...' : 'Send 0.10 USDC Payment'}
                       </button>
                     </div>
                   </div>
@@ -1829,7 +1829,7 @@ print(response.json())`}
             <div className="flex items-center gap-4">
               <span>Base Mainnet (8453)</span>
               <span>•</span>
-              <span>0.25 USDC / call</span>
+              <span>0.10 USDC / call</span>
             </div>
           </div>
         </footer>
