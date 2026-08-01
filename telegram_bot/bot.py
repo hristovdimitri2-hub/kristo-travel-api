@@ -34,7 +34,7 @@ from telegram.ext import (
 
 # ============ CONFIG ============
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-API_BASE = os.getenv("API_BASE", "https://kristo-intelligence-api.onrender.com")
+API_BASE = os.getenv("API_BASE", "https://kristo-intelligence.vercel.app")
 PAYMENT_WALLET = "0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f"
 PRICE_USDC = "0.25"
 

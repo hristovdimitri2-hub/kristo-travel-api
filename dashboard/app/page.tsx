@@ -36,7 +36,7 @@ import {
 import { ethers } from 'ethers';
 
 // Configuration & Constants
-const DEFAULT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://kristo-intelligence-api.onrender.com';
+const DEFAULT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://kristo-intelligence.vercel.app';
 const USDC_CONTRACT_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const API_WALLET_ADDRESS = '0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f';
 const PRICE_USDC = '0.10';
