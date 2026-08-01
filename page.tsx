@@ -39,7 +39,7 @@ import { ethers } from 'ethers';
 const DEFAULT_API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://kristo-intelligence-api.onrender.com';
 const USDC_CONTRACT_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 const API_WALLET_ADDRESS = '0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f';
-const PRICE_USDC = '0.01';
+const PRICE_USDC = '0.25';
 const BASE_CHAIN_ID = 8453;
 const BASE_CHAIN_ID_HEX = '0x2105';
 
@@ -1607,7 +1607,7 @@ export default function KristoDashboard() {
                   <div>
                     <p className="text-xs text-slate-400 uppercase font-medium">Total Revenue Generated</p>
                     <p className="text-3xl font-black font-mono text-emerald-400 mt-1">
-                      {formatUSD((salesData?.total_sales ?? 0) * 0.01)}
+                      {formatUSD((salesData?.total_sales ?? 0) * 0.25)}
                     </p>
                   </div>
                   <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
