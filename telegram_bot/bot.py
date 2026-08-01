@@ -10,16 +10,16 @@ Free commands:
   /help      — All commands
 
 Premium commands (show preview + payment link):
-  /scan <address>  — Rug-pull & honeypot detection (0.25 USDC)
-  /yields          — Top 10 Base DeFi yield pools (0.25 USDC)
-  /whales          — Large USDC transfers on Base (0.25 USDC)
-  /wallet <addr>   — Wallet profile analysis (0.25 USDC)
-  /lending         — Best lending/borrowing rates (0.25 USDC)
-  /dex             — Top DEX liquidity pools (0.25 USDC)
-  /safety          — Protocol safety scores (0.25 USDC)
-  /launches        — Recently launched tokens (0.25 USDC)
-  /tvl             — Biggest TVL movers (0.25 USDC)
-  /bridge          — Cross-chain bridge volume (0.25 USDC)
+  /scan <address>  — Rug-pull & honeypot detection (0.10 USDC)
+  /yields          — Top 10 Base DeFi yield pools (0.10 USDC)
+  /whales          — Large USDC transfers on Base (0.10 USDC)
+  /wallet <addr>   — Wallet profile analysis (0.10 USDC)
+  /lending         — Best lending/borrowing rates (0.10 USDC)
+  /dex             — Top DEX liquidity pools (0.10 USDC)
+  /safety          — Protocol safety scores (0.10 USDC)
+  /launches        — Recently launched tokens (0.10 USDC)
+  /tvl             — Biggest TVL movers (0.10 USDC)
+  /bridge          — Cross-chain bridge volume (0.10 USDC)
 """
 
 import os
@@ -194,7 +194,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "**Безплатно:**\n"
         "  💰 Цени на токени (/price)\n"
         "  ⛽ Gas prices (/gas)\n\n"
-        "**Платено (0.25 USDC/call):**\n"
+        "**Платено (0.10 USDC/call):**\n"
         "  🛡️ Token scanner — rug-pull detection\n"
         "  📈 DeFi yields — топ pools по TVL\n"
         "  🐋 Whale moves — големи USDC трансфери\n"
@@ -210,7 +210,7 @@ async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "🆓 **Безплатни:**\n"
         "/price — Цени на токени\n"
         "/gas — Base gas oracle\n\n"
-        "💎 **Платени (0.25 USDC):**\n"
+        "💎 **Платени (0.10 USDC):**\n"
         "/scan <address> — Rug-pull скенер\n"
         "/yields — DeFi yield pools\n"
         "/whales — Whale трансфери\n"

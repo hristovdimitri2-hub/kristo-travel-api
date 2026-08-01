@@ -28,14 +28,14 @@ BASE_RPC_URL = os.getenv("BASE_RPC_URL", "https://mainnet.base.org")
 WALLET_ADDRESS = os.getenv("WALLET_ADDRESS", "0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f")
 USDC_ADDRESS = os.getenv("USDC_ADDRESS", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
 WETH_ADDRESS = os.getenv("WETH_ADDRESS", "0x4200000000000000000000000000000000000006")
-PRICE_USDC = float(os.getenv("PRICE_USDC", "0.25"))
+PRICE_USDC = float(os.getenv("PRICE_USDC", "0.10"))
 PRICE_RAW = int(os.getenv("PRICE_RAW", "10000"))
 CHAIN_ID = int(os.getenv("CHAIN_ID", "8453"))
 DB_PATH = os.getenv("DB_PATH", "kristo.db")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 RATE_LIMIT = os.getenv("RATE_LIMIT", "30/minute")
-TRIAL_FREE_CALLS = int(os.getenv("TRIAL_FREE_CALLS", "3"))
+TRIAL_FREE_CALLS = int(os.getenv("TRIAL_FREE_CALLS", "10"))
 VOLUME_DISCOUNT_THRESHOLD = int(os.getenv("VOLUME_DISCOUNT_THRESHOLD", "50"))
 VOLUME_DISCOUNT_PRICE = float(os.getenv("VOLUME_DISCOUNT_PRICE", "0.15"))
 REFERRAL_BONUS_PERCENT = float(os.getenv("REFERRAL_BONUS_PERCENT", "0.20"))
@@ -482,7 +482,7 @@ async def custom_openapi_endpoint():
             "title": "Kristo Intelligence API",
             "version": "1.0.0",
             "description": "Production-ready pay-per-call AI Agent Intelligence API powered by x402 on Base Blockchain (Chain ID 8453). "
-                           "Each paid endpoint requires payment of 0.25 USDC sent to 0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f via X-PAYMENT header.",
+                           "Each paid endpoint requires payment of 0.10 USDC sent to 0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f via X-PAYMENT header.",
             "x-402-pricing": {
                 "price_per_call_usdc": PRICE_USDC,
                 "amount_raw": str(PRICE_RAW),
