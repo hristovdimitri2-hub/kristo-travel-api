@@ -1,3 +1,6 @@
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 import { NextResponse } from 'next/server';
 import { withPayment } from '../../../lib/payment';
 import { ALCHEMY_RPC } from '../../../lib/config';

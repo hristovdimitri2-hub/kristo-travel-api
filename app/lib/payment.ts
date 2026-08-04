@@ -116,6 +116,9 @@ export function createPaymentRequiredResponse(
       'x-trial-credits': String(TRIAL_CREDITS),
       'x-trial-header': 'X-TRIAL-WALLET',
       'x-demo-mode': 'add ?demo=true for sample data',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
     },
   });
 }
@@ -315,7 +318,12 @@ export function withPayment(
 
     return new Response(JSON.stringify(result), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
     });
   };
 }
