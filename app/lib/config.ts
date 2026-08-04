@@ -1,0 +1,9 @@
+export const WALLET_ADDRESS = '0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f';
+export const USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+export const CHAIN_ID = 8453;
+export const PRICE_USDC = 0.10;
+export const PRICE_RAW = 100000;
+export const TRIAL_CREDITS = 10;
+export const VOLUME_DISCOUNT_THRESHOLD = 50;
+export const VOLUME_DISCOUNT_PRICE_RAW = 50000;
+export const ALCHEMY_RPC = 'https://base-mainnet.g.alchemy.com/v2/alch_jicglUNUbtHsmU1peFGlT';
