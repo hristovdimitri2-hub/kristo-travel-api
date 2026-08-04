@@ -29,7 +29,11 @@ WALLET_ADDRESS = os.getenv("WALLET_ADDRESS", "0xd4cdA980839C8FED4374EE37EA8DBE8c
 USDC_ADDRESS = os.getenv("USDC_ADDRESS", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913")
 WETH_ADDRESS = os.getenv("WETH_ADDRESS", "0x4200000000000000000000000000000000000006")
 PRICE_USDC = float(os.getenv("PRICE_USDC", "0.10"))
-PRICE_RAW = int(os.getenv("PRICE_RAW", "10000"))
+# FIX (2026-08-04): PRICE_RAW used to be an independent env var that defaulted to
+# 10000 (=0.01 USDC) while PRICE_USDC defaulted to 0.10 USDC — a mismatch that let
+# agents pay 10x less than advertised and verify successfully. PRICE_RAW is now ALWAYS
+# derived from PRICE_USDC so the advertised price and the on-chain check can never diverge.
+PRICE_RAW = int(round(PRICE_USDC * 1_000_000))  # USDC has 6 decimals
 CHAIN_ID = int(os.getenv("CHAIN_ID", "8453"))
 DB_PATH = os.getenv("DB_PATH", "kristo.db")
 HOST = os.getenv("HOST", "0.0.0.0")
@@ -37,7 +41,7 @@ PORT = int(os.getenv("PORT", "8000"))
 RATE_LIMIT = os.getenv("RATE_LIMIT", "30/minute")
 TRIAL_FREE_CALLS = int(os.getenv("TRIAL_FREE_CALLS", "10"))
 VOLUME_DISCOUNT_THRESHOLD = int(os.getenv("VOLUME_DISCOUNT_THRESHOLD", "50"))
-VOLUME_DISCOUNT_PRICE = float(os.getenv("VOLUME_DISCOUNT_PRICE", "0.15"))
+VOLUME_DISCOUNT_PRICE = float(os.getenv("VOLUME_DISCOUNT_PRICE", "0.05"))  # FIX (2026-08-04): was 0.15, higher than base price — illogical
 REFERRAL_BONUS_PERCENT = float(os.getenv("REFERRAL_BONUS_PERCENT", "0.20"))
 
 # Freemium endpoints (free with rate limiting)
