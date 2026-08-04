@@ -1,0 +1,14 @@
+services:
+  - type: worker
+    name: kristo-telegram-bot
+    runtime: python
+    rootDir: telegram_bot
+    buildCommand: pip install --no-cache-dir -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: API_BASE
+        value: "https://kristo-intelligence.vercel.app"
