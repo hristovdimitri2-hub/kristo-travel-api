@@ -55,6 +55,20 @@ export interface X402ResponseBody {
   accepts: X402AcceptsV2[];
   x402_version: number;
   accepts_v1: X402AcceptsV1;
+  extensions?: {
+    bazaar?: {
+      info: {
+        input: {
+          type: string;
+          method: string;
+        };
+        output?: {
+          example?: any;
+        };
+      };
+      schema?: any;
+    };
+  };
 }
 
 export function createPaymentRequiredResponse(
@@ -63,6 +77,16 @@ export function createPaymentRequiredResponse(
   customError?: string
 ): Response {
   const errorText = customError || DEFAULT_ERROR;
+
+  const acceptsV2: X402AcceptsV2 = {
+    scheme: 'exact',
+    network: `eip155:${CHAIN_ID}`,
+    amount: String(PRICE_RAW),
+    asset: USDC_ADDRESS,
+    payTo: WALLET_ADDRESS,
+    maxTimeoutSeconds: 60,
+    extra: { name: 'USDC', version: '2' },
+  };
 
   const acceptsV1: X402AcceptsV1 = {
     scheme: 'exact',
@@ -73,32 +97,57 @@ export function createPaymentRequiredResponse(
     description,
   };
 
+  const resource: X402Resource = {
+    url: `https://kristo-intelligence.vercel.app${endpointPath}`,
+    description,
+    mimeType: 'application/json',
+    serviceName: 'Kristo Intelligence',
+    tags: ['defi', 'base', 'crypto', 'ai-agents'],
+    iconUrl: 'https://kristo-intelligence.vercel.app/icon.svg',
+  };
+
   const body: X402ResponseBody = {
     x402Version: 2,
     error: errorText,
-    resource: {
-      url: `https://kristo-intelligence.vercel.app${endpointPath}`,
-      description,
-      mimeType: 'application/json',
-      serviceName: 'Kristo Intelligence',
-      tags: ['defi', 'base', 'crypto', 'ai-agents'],
-      iconUrl: 'https://kristo-intelligence.vercel.app/icon.svg',
-    },
-    accepts: [
-      {
-        scheme: 'exact',
-        network: `eip155:${CHAIN_ID}`,
-        amount: String(PRICE_RAW),
-        asset: USDC_ADDRESS,
-        payTo: WALLET_ADDRESS,
-        maxTimeoutSeconds: 60,
-        extra: { name: 'USDC', version: '2' },
-      },
-    ],
+    resource,
+    accepts: [acceptsV2],
     x402_version: 1,
     accepts_v1: acceptsV1,
+    extensions: {
+      bazaar: {
+        info: {
+          input: {
+            type: 'http',
+            method: 'GET',
+          },
+          output: {
+            example: {
+              description: 'JSON response with DeFi intelligence data on Base blockchain',
+            },
+          },
+        },
+        schema: {
+          type: 'object',
+          properties: {
+            data: { type: 'object' },
+            queried_at: { type: 'string', format: 'date-time' },
+            data_source: { type: 'string' },
+          },
+        },
+      },
+    },
   };
 
+  // x402 v2: full PaymentRequired payload in PAYMENT-REQUIRED header
+  const paymentRequiredHeader = JSON.stringify({
+    x402Version: 2,
+    error: errorText,
+    resource,
+    accepts: [acceptsV2],
+    extensions: body.extensions,
+  });
+
+  // x402 v1: backward-compatible header
   const xPaymentRequiredHeader = JSON.stringify({
     x402_version: 1,
     accepts: acceptsV1,
@@ -109,6 +158,7 @@ export function createPaymentRequiredResponse(
     status: 402,
     headers: {
       'Content-Type': 'application/json',
+      'PAYMENT-REQUIRED': paymentRequiredHeader,
       'X-PAYMENT-REQUIRED': xPaymentRequiredHeader,
       'access-control-expose-headers': 'PAYMENT-REQUIRED, X-PAYMENT-REQUIRED',
       'x-bounty-program': '50-free-credits-for-first-100-agents',
