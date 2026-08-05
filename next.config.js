@@ -7,6 +7,14 @@ const nextConfig = {
         source: '/.well-known/x402.json',
         destination: '/well-known/x402.json',
       },
+      {
+        source: '/api/openapi.json',
+        destination: '/openapi.json',
+      },
+      {
+        source: '/api/pricing',
+        destination: '/api/stats/public',
+      },
     ];
   },
 };

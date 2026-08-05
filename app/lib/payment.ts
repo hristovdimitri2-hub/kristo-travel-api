@@ -116,7 +116,7 @@ export function createPaymentRequiredResponse(
       'x-trial-credits': String(TRIAL_CREDITS),
       'x-trial-header': 'X-TRIAL-WALLET',
       'x-demo-mode': 'add ?demo=true for sample data',
-      'Cache-Control': 'no-store, no-cache, must-revalidate',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       'Pragma': 'no-cache',
       'Expires': '0',
     },
@@ -320,7 +320,7 @@ export function withPayment(
       status: 200,
       headers: {
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0',
       },
