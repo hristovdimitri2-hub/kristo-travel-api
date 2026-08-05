@@ -158,7 +158,7 @@ export function createPaymentRequiredResponse(
     status: 402,
     headers: {
       'Content-Type': 'application/json',
-      'PAYMENT-REQUIRED': paymentRequiredHeader,
+      'PAYMENT-REQUIRED': Buffer.from(paymentRequiredHeader).toString('base64'),
       'X-PAYMENT-REQUIRED': xPaymentRequiredHeader,
       'access-control-expose-headers': 'PAYMENT-REQUIRED, X-PAYMENT-REQUIRED',
       'x-bounty-program': '50-free-credits-for-first-100-agents',
