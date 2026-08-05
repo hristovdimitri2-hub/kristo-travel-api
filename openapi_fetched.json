@@ -1,0 +1,167 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Kristo Intelligence API",
+    "version": "1.0.0",
+    "description": "Production-ready pay-per-call AI Agent Intelligence API powered by x402 on Base Blockchain (Chain ID 8453). Each paid endpoint requires payment of 0.01 USDC sent to 0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f via X-PAYMENT header.",
+    "x-402-pricing": {
+      "price_per_call_usdc": 0.01,
+      "amount_raw": "10000",
+      "asset": "USDC",
+      "asset_address": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "pay_to": "0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f",
+      "chain_id": 8453
+    }
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Root Metadata",
+        "description": "Returns service metadata, pricing, and available endpoints.",
+        "responses": {
+          "200": {
+            "description": "Service metadata"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Returns API health status and current Base block height.",
+        "responses": {
+          "200": {
+            "description": "Health status"
+          }
+        }
+      }
+    },
+    "/sales/recent": {
+      "get": {
+        "summary": "Recent Sales Log",
+        "description": "Returns total sales count and last 10 sales from SQLite database.",
+        "responses": {
+          "200": {
+            "description": "Sales history"
+          }
+        }
+      }
+    },
+    "/defi/yields": {
+      "get": {
+        "summary": "Top Base Yield Pools (Paid)",
+        "description": "Requires 0.01 USDC via x402. Returns top 10 Base-chain yield pools from DefiLlama.",
+        "responses": {
+          "200": {
+            "description": "Top 10 yield pools"
+          },
+          "402": {
+            "description": "Payment Required (x402)"
+          }
+        }
+      }
+    },
+    "/defi/tvl-movers": {
+      "get": {
+        "summary": "Base TVL Movers (Paid)",
+        "description": "Requires 0.01 USDC via x402. Returns top 15 Base DeFi protocols by 1-day TVL change.",
+        "responses": {
+          "200": {
+            "description": "Top 15 TVL movers"
+          },
+          "402": {
+            "description": "Payment Required (x402)"
+          }
+        }
+      }
+    },
+    "/crypto/token-prices": {
+      "get": {
+        "summary": "Token Prices (Paid)",
+        "description": "Requires 0.01 USDC via x402. Returns real-time token prices from CoinGecko for specified Base tokens.",
+        "parameters": [
+          {
+            "name": "tokens",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "ETH,USDC,WETH,BASE"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Real-time token prices"
+          },
+          "402": {
+            "description": "Payment Required (x402)"
+          }
+        }
+      }
+    },
+    "/crypto/wallet-profile": {
+      "get": {
+        "summary": "Wallet Profile Analysis (Paid)",
+        "description": "Requires 0.01 USDC via x402. Returns on-chain balances, transaction count, recent USDC activity, and tier classification.",
+        "parameters": [
+          {
+            "name": "address",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Wallet profile and classification"
+          },
+          "402": {
+            "description": "Payment Required (x402)"
+          }
+        }
+      }
+    },
+    "/crypto/whale-moves": {
+      "get": {
+        "summary": "Whale USDC Moves (Paid)",
+        "description": "Requires 0.01 USDC via x402. Returns large USDC transfers on Base scanned from the last 500 blocks.",
+        "parameters": [
+          {
+            "name": "min_usdc",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 1000.0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Whale transfers and aggregate stats"
+          },
+          "402": {
+            "description": "Payment Required (x402)"
+          }
+        }
+      }
+    },
+    "/crypto/gas-oracle": {
+      "get": {
+        "summary": "Base Gas Oracle (Paid)",
+        "description": "Requires 0.01 USDC via x402. Returns current Base gas price, cost estimates for ETH/USDC transfers, swaps, contract calls, and gas recommendation.",
+        "responses": {
+          "200": {
+            "description": "Gas oracle metrics and estimates"
+          },
+          "402": {
+            "description": "Payment Required (x402)"
+          }
+        }
+      }
+    }
+  }
+}

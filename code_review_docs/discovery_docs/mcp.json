@@ -1,0 +1,141 @@
+{
+  "mcpServers": {
+    "kristo-intelligence": {
+      "name": "Kristo Intelligence",
+      "description": "Pay-per-call DeFi intelligence API for AI agents on Base blockchain. 10 paid endpoints (0.10 USDC/call) including rug-pull detection, yield pools, DEX analytics, and whale tracking. 2 freemium endpoints (token prices, gas oracle). Uses x402 HTTP 402 payment protocol with USDC micropayments.",
+      "version": "5.0.0",
+      "transport": {
+        "type": "streamable-http",
+        "url": "https://kristo-intelligence.vercel.app/mcp"
+      },
+      "tools": [
+        {
+          "name": "get_defi_yields",
+          "description": "Top 10 Base DeFi yield pools by TVL",
+          "paid": true,
+          "price_usdc": 0.1
+        },
+        {
+          "name": "get_tvl_movers",
+          "description": "Base protocols with biggest 1-day TVL changes",
+          "paid": true,
+          "price_usdc": 0.1
+        },
+        {
+          "name": "get_lending_rates",
+          "description": "Best lending and borrowing rates on Base",
+          "paid": true,
+          "price_usdc": 0.1
+        },
+        {
+          "name": "get_dex_pools",
+          "description": "Top DEX liquidity pools on Base",
+          "paid": true,
+          "price_usdc": 0.1
+        },
+        {
+          "name": "get_protocol_safety",
+          "description": "Risk scores for Base DeFi protocols",
+          "paid": true,
+          "price_usdc": 0.1
+        },
+        {
+          "name": "get_token_launches",
+          "description": "Recently launched tokens on Base",
+          "paid": true,
+          "price_usdc": 0.1
+        },
+        {
+          "name": "scan_token_security",
+          "description": "Rug-pull and honeypot detection scanner",
+          "paid": true,
+          "price_usdc": 0.1,
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "string",
+                "pattern": "^0x[a-fA-F0-9]{40}$",
+                "description": "Token contract address on Base"
+              }
+            },
+            "required": [
+              "address"
+            ]
+          }
+        },
+        {
+          "name": "get_wallet_profile",
+          "description": "On-chain wallet analysis and classification",
+          "paid": true,
+          "price_usdc": 0.1,
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "address": {
+                "type": "string",
+                "pattern": "^0x[a-fA-F0-9]{40}$",
+                "description": "Wallet address to analyze"
+              }
+            },
+            "required": [
+              "address"
+            ]
+          }
+        },
+        {
+          "name": "get_whale_moves",
+          "description": "Large USDC transfers on Base",
+          "paid": true,
+          "price_usdc": 0.1
+        },
+        {
+          "name": "get_bridge_volume",
+          "description": "Cross-chain bridge volume to/from Base",
+          "paid": true,
+          "price_usdc": 0.1
+        },
+        {
+          "name": "get_token_prices",
+          "description": "Real-time token prices (freemium)",
+          "paid": false
+        },
+        {
+          "name": "get_gas_oracle",
+          "description": "Base gas price estimates (freemium)",
+          "paid": false
+        },
+        {
+          "name": "get_intelligence_report",
+          "description": "Autonomous intelligence report",
+          "paid": false
+        },
+        {
+          "name": "get_api_stats",
+          "description": "Public API usage statistics",
+          "paid": false
+        },
+        {
+          "name": "get_pricing_info",
+          "description": "Detailed pricing information",
+          "paid": false
+        }
+      ],
+      "payment": {
+        "protocol": "x402",
+        "network": "base",
+        "chain_id": 8453,
+        "asset": "USDC",
+        "price_per_call": 0.10,
+        "pay_to": "0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f"
+      },
+      "links": {
+        "api": "https://kristo-intelligence.vercel.app",
+        "dashboard": "https://kristo-intelligence.vercel.app",
+        "github": "https://github.com/hristovdimitri2-hub/kristo-travel-api",
+        "openapi": "https://kristo-intelligence.vercel.app/openapi.json",
+        "discovery": "https://kristo-intelligence.vercel.app/.well-known/x402.json"
+      }
+    }
+  }
+}

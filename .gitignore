@@ -28,3 +28,4 @@ Thumbs.db
 # Render
 render.yaml.local
 incoming_files/
+.env*

@@ -22,6 +22,7 @@ export async function GET() {
   const spec = {
     openapi: '3.1.0',
     info: {
+      contact: { email: 'dimitri.hristov@kristo-intelligence.io' },
       title: 'Kristo Base-chain Intelligence API',
       version: '5.0.0',
       description:
