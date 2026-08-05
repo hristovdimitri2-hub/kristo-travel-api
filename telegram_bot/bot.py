@@ -25,6 +25,7 @@ Premium commands (0.10 USDC/call via x402):
 import os
 import json
 import logging
+import asyncio
 import httpx
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -58,7 +59,6 @@ async def api_get(endpoint: str, params: dict = None) -> dict:
 
 # ============ FORMATTERS ============
 def fmt_price(data: dict) -> str:
-    """Format token prices from v5.0 /api/crypto/token-prices"""
     tokens = data.get("tokens", data.get("prices", []))
     if not tokens:
         return "❌ Няма данни за цени в момента."
@@ -78,7 +78,6 @@ def fmt_price(data: dict) -> str:
     return "\n".join(lines)
 
 def fmt_gas(data: dict) -> str:
-    """Format gas oracle from v5.0 /api/crypto/gas-oracle"""
     lines = ["⛽ **Base Gas Oracle**\n"]
     gas = data.get("gas_price_gwei", data.get("gwei", "?"))
     lines.append(f"  Текущ: **{gas} gwei**")
@@ -95,7 +94,6 @@ def fmt_gas(data: dict) -> str:
     return "\n".join(lines)
 
 def fmt_yields(data: dict) -> str:
-    """Format DeFi yields from v5.0 /api/defi/yields"""
     pools = data.get("top_pools_by_tvl", data.get("pools", data.get("data", [])))
     if not pools:
         return "❌ Няма данни за yield pools."
@@ -113,7 +111,6 @@ def fmt_yields(data: dict) -> str:
     return "\n".join(lines)
 
 def fmt_tvl_movers(data: dict) -> str:
-    """Format TVL movers from v5.0 /api/defi/tvl-movers"""
     movers = data.get("movers", data.get("protocols", data.get("data", [])))
     if not movers:
         return "❌ Няма данни за TVL movers."
@@ -129,7 +126,6 @@ def fmt_tvl_movers(data: dict) -> str:
     return "\n".join(lines)
 
 def fmt_whales(data: dict) -> str:
-    """Format whale moves from v5.0 /api/crypto/whale-moves"""
     moves = data.get("transfers", data.get("moves", data.get("data", [])))
     if not moves:
         return "❌ Няма whale movements в момента."
@@ -143,7 +139,6 @@ def fmt_whales(data: dict) -> str:
     return "\n".join(lines)
 
 def fmt_wallet(data: dict) -> str:
-    """Format wallet profile from v5.0 /api/crypto/wallet-profile"""
     result = data.get("data", data)
     lines = ["👤 **Wallet Profile**\n"]
     cls = result.get("classification", result.get("type", result.get("label", "?")))
@@ -161,7 +156,6 @@ def fmt_wallet(data: dict) -> str:
     return "\n".join(lines)
 
 def fmt_nft(data: dict) -> str:
-    """Format NFT floor prices from v5.0 /api/nft/floor-prices"""
     collections = data.get("collections", data.get("data", []))
     if not collections:
         return "❌ Няма данни за NFT floor prices."
@@ -176,7 +170,6 @@ def fmt_nft(data: dict) -> str:
     return "\n".join(lines)
 
 def fmt_airdrops(data: dict) -> str:
-    """Format airdrops from v5.0 /api/crypto/airdrop-tracker"""
     airdrops = data.get("airdrops", data.get("campaigns", data.get("data", [])))
     if not airdrops:
         return "❌ Няма активни airdrop кампании."
@@ -236,151 +229,135 @@ PAID_ENDPOINTS = {
     "wallet": {"path": "/crypto/wallet-profile", "desc": "Wallet Profile Analysis", "formatter": fmt_wallet},
 }
 
-async def handle_paid_endpoint(update: Update, ctx, key: str, params: dict = None):
-    """Handle a paid endpoint — show data if free tier, payment msg if 402."""
-    ep = PAID_ENDPOINTS.get(key)
-    if not ep:
-        return
-
-    result = await api_get(ep["path"], params)
-    if result.get("payment_required"):
-        text = fmt_payment_message(ep["path"], ep["desc"])
-        kb = payment_keyboard(ep["path"])
-        if update.callback_query:
-            await update.callback_query.message.reply_text(text, parse_mode="Markdown", reply_markup=kb)
-        else:
-            await update.message.reply_text(text, parse_mode="Markdown", reply_markup=kb)
-    elif result.get("error"):
-        text = f"❌ Грешка: {result['error']}"
-        if update.callback_query:
-            await update.callback_query.message.reply_text(text)
-        else:
-            await update.message.reply_text(text)
-    else:
-        text = ep["formatter"](result.get("data", {}))
-        if update.callback_query:
-            await update.callback_query.message.reply_text(text, parse_mode="Markdown", reply_markup=main_menu())
-        else:
-            await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_menu())
-
-# ============ HANDLERS ============
+# ============ COMMAND HANDLERS ============
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     welcome = (
-        "👋 **Добре дошли в Kristo Intelligence v5.0!**\n\n"
-        "Вашият DeFi асистент за Base blockchain.\n\n"
-        "**🆓 Безплатно:**\n"
-        "  💰 Цени на токени (/price)\n"
-        "  ⛽ Gas prices (/gas)\n"
-        "  🎨 NFT floor prices (/nft)\n"
-        "  🎁 Airdrop tracker (/airdrops)\n\n"
-        f"**💎 Платено ({PRICE_USDC} USDC/call):**\n"
-        "  📈 DeFi yields — топ pools по TVL\n"
-        "  📊 TVL movers — най-големи промени\n"
-        "  🐋 Whale moves — големи USDC трансфери\n"
-        "  👤 Wallet profile — анализ на wallet\n\n"
-        f"💎 Първите 2 calls са БЕЗПЛАТНИ!\n"
-        f"💳 Плащане: {PRICE_USDC} USDC на Base mainnet\n"
-        f"⚙️ API: {API_BASE}"
+        "🤖 **Добре дошли в Kristo Intelligence Bot!**\n\n"
+        "Вашият персонален DeFi intelligence асистент за Base blockchain.\n\n"
+        "**Безплатни команди:**\n"
+        "  /price — Цени на токени\n"
+        "  /gas — Base gas oracle\n"
+        "  /nft — NFT floor prices\n"
+        "  /airdrops — Активни airdrops\n"
+        "  /health — API статус\n\n"
+        "**Платени команди (0.10 USDC):**\n"
+        "  /yields — Top DeFi yields\n"
+        "  /tvl — TVL movers\n"
+        "  /whales — Whale movements\n"
+        "  /wallet <addr> — Wallet analysis\n\n"
+        "💎 *Първите 2 calls са безплатни!*"
     )
     await update.message.reply_text(welcome, parse_mode="Markdown", reply_markup=main_menu())
 
 async def cmd_help(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     help_text = (
-        "**Kristo Intelligence v5.0 — Команди**\n\n"
-        "🆓 **Безплатни:**\n"
-        "/price — Цени на токени\n"
-        "/gas — Base gas oracle\n"
-        "/nft — NFT floor prices\n"
-        "/airdrops — Активни airdrops\n"
-        "/health — API статус\n\n"
-        f"💎 **Платени ({PRICE_USDC} USDC):**\n"
-        "/yields — DeFi yield pools\n"
-        "/tvl — TVL movers\n"
-        "/whales — Whale трансфери\n"
-        "/wallet <address> — Wallet анализ\n\n"
-        f"💳 Адрес: `{PAYMENT_WALLET}`\n"
-        f"⚙️ API: {API_BASE}"
+        "**Kristo Intelligence Bot — Помощ**\n\n"
+        "Безплатно:\n"
+        "  /price, /gas, /nft, /airdrops, /health\n\n"
+        "Платено (0.10 USDC на Base):\n"
+        "  /yields, /tvl, /whales, /wallet <address>\n\n"
+        "Първите 2 платени calls са безплатни (trial credits)."
     )
-    await update.message.reply_text(help_text, parse_mode="Markdown")
+    await update.message.reply_text(help_text, parse_mode="Markdown", reply_markup=main_menu())
 
 async def cmd_price(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    result = await api_get("/crypto/token-prices", {"tokens": "ETH,USDC,WETH,BASE"})
-    if result.get("error"):
-        await update.message.reply_text(f"❌ Грешка: {result['error']}")
-        return
+    result = await api_get("/crypto/token-prices")
     if result.get("payment_required"):
-        text = fmt_payment_message("/crypto/token-prices", "Token Prices")
-        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=payment_keyboard("/crypto/token-prices"))
-        return
-    text = fmt_price(result.get("data", {}))
-    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_menu())
+        await update.message.reply_text(fmt_payment_message("/crypto/token-prices", "Token Prices"))
+    elif result.get("error"):
+        await update.message.reply_text(f"❌ {result['error']}")
+    else:
+        await update.message.reply_text(fmt_price(result.get("data", {})), parse_mode="Markdown", reply_markup=main_menu())
 
 async def cmd_gas(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     result = await api_get("/crypto/gas-oracle")
-    if result.get("error"):
-        await update.message.reply_text(f"❌ Грешка: {result['error']}")
-        return
-    text = fmt_gas(result.get("data", {}))
-    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_menu())
+    if result.get("payment_required"):
+        await update.message.reply_text(fmt_payment_message("/crypto/gas-oracle", "Gas Oracle"))
+    elif result.get("error"):
+        await update.message.reply_text(f"❌ {result['error']}")
+    else:
+        await update.message.reply_text(fmt_gas(result.get("data", {})), parse_mode="Markdown", reply_markup=main_menu())
 
 async def cmd_nft(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     result = await api_get("/nft/floor-prices")
-    if result.get("error"):
-        await update.message.reply_text(f"❌ Грешка: {result['error']}")
-        return
     if result.get("payment_required"):
-        text = fmt_payment_message("/nft/floor-prices", "NFT Floor Prices")
-        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=payment_keyboard("/nft/floor-prices"))
-        return
-    text = fmt_nft(result.get("data", {}))
-    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_menu())
+        await update.message.reply_text(fmt_payment_message("/nft/floor-prices", "NFT Floor Prices"))
+    elif result.get("error"):
+        await update.message.reply_text(f"❌ {result['error']}")
+    else:
+        await update.message.reply_text(fmt_nft(result.get("data", {})), parse_mode="Markdown", reply_markup=main_menu())
 
 async def cmd_airdrops(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     result = await api_get("/crypto/airdrop-tracker")
-    if result.get("error"):
-        await update.message.reply_text(f"❌ Грешка: {result['error']}")
-        return
     if result.get("payment_required"):
-        text = fmt_payment_message("/crypto/airdrop-tracker", "Airdrop Tracker")
-        await update.message.reply_text(text, parse_mode="Markdown", reply_markup=payment_keyboard("/crypto/airdrop-tracker"))
-        return
-    text = fmt_airdrops(result.get("data", {}))
-    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_menu())
+        await update.message.reply_text(fmt_payment_message("/crypto/airdrop-tracker", "Airdrop Tracker"))
+    elif result.get("error"):
+        await update.message.reply_text(f"❌ {result['error']}")
+    else:
+        await update.message.reply_text(fmt_airdrops(result.get("data", {})), parse_mode="Markdown", reply_markup=main_menu())
 
 async def cmd_health(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     result = await api_get("/health")
     if result.get("error"):
-        await update.message.reply_text(f"❌ API е недостъпен: {result['error']}")
+        await update.message.reply_text(f"❌ API offline: {result['error']}")
+    else:
+        data = result.get("data", {})
+        status = data.get("status", "unknown")
+        block = data.get("block_number", "?")
+        await update.message.reply_text(
+            f"🟢 **API Status: {status}**\n"
+            f"   Block: {block}\n"
+            f"   URL: {API_BASE}",
+            parse_mode="Markdown",
+            reply_markup=main_menu()
+        )
+
+async def handle_paid_endpoint(update_or_query, ctx: ContextTypes.DEFAULT_TYPE, endpoint_key: str, message=None):
+    ep = PAID_ENDPOINTS.get(endpoint_key)
+    if not ep:
+        if message:
+            await message.reply_text("❌ Неизвестен endpoint")
         return
-    data = result.get("data", {})
-    status = data.get("status", "?")
-    block = data.get("block", data.get("current_block_number", "?"))
-    web3 = data.get("web3_connected", "?")
-    emoji = "🟢" if status == "online" else "🔴"
-    text = f"{emoji} **Kristo Intelligence API**\n\nStatus: **{status}**\nBlock: **{block}**\nWeb3: **{web3}**"
-    await update.message.reply_text(text, parse_mode="Markdown")
+    headers = {"X-TRIAL-WALLET": "telegram-bot-user"}
+    url = f"{API_BASE}/api{ep['path']}"
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        res = await client.get(url, headers=headers)
+    if res.status_code == 402:
+        if message:
+            await message.reply_text(
+                fmt_payment_message(ep['path'], ep['desc']),
+                parse_mode="Markdown",
+                reply_markup=payment_keyboard(ep['path'])
+            )
+    elif res.status_code == 200:
+        data = res.json()
+        if message:
+            await message.reply_text(ep['formatter'](data), parse_mode="Markdown", reply_markup=main_menu())
+    else:
+        if message:
+            await message.reply_text(f"❌ HTTP {res.status_code}")
 
 async def cmd_yields(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    await handle_paid_endpoint(update, ctx, "yields")
+    await handle_paid_endpoint(update, ctx, "yields", update.message)
 
 async def cmd_tvl(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    await handle_paid_endpoint(update, ctx, "tvl")
+    await handle_paid_endpoint(update, ctx, "tvl", update.message)
 
 async def cmd_whales(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    await handle_paid_endpoint(update, ctx, "whales")
+    await handle_paid_endpoint(update, ctx, "whales", update.message)
 
 async def cmd_wallet(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not ctx.args:
         await update.message.reply_text(
-            "Използване: `/wallet <address>`\nПример: `/wallet 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`",
+            "👤 Използвайте: `/wallet <address>`\nНапример: `/wallet 0x1234...abcd`",
             parse_mode="Markdown"
         )
         return
-    address = ctx.args[0].strip()
+    address = ctx.args[0]
     if not address.startswith("0x") or len(address) != 42:
-        await update.message.reply_text("❌ Невалиден Ethereum адрес. Трябва да започва с 0x и да е 42 символа.")
+        await update.message.reply_text("❌ Невалиден адрес. Трябва да започва с 0x и да е 42 символа.")
         return
-    await handle_paid_endpoint(update, ctx, "wallet", {"address": address})
+    await handle_paid_endpoint(update, ctx, "wallet", update.message)
 
 # ============ CALLBACK HANDLER ============
 async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -388,30 +365,30 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
 
-    if data == "menu":
-        await query.message.reply_text("🏠 Меню:", reply_markup=main_menu())
+    if data == "menu" or data == "start":
+        await query.message.reply_text("🤖 Изберете опция:", reply_markup=main_menu())
     elif data == "help":
         await cmd_help(update, ctx)
     elif data == "price":
-        result = await api_get("/crypto/token-prices", {"tokens": "ETH,USDC,WETH,BASE"})
+        result = await api_get("/crypto/token-prices")
         if result.get("payment_required"):
-            text = fmt_payment_message("/crypto/token-prices", "Token Prices")
-            await query.message.reply_text(text, parse_mode="Markdown", reply_markup=payment_keyboard("/crypto/token-prices"))
+            await query.message.reply_text(fmt_payment_message("/crypto/token-prices", "Token Prices"))
         elif result.get("error"):
             await query.message.reply_text(f"❌ {result['error']}")
         else:
             await query.message.reply_text(fmt_price(result.get("data", {})), parse_mode="Markdown", reply_markup=main_menu())
     elif data == "gas":
         result = await api_get("/crypto/gas-oracle")
-        if result.get("error"):
+        if result.get("payment_required"):
+            await query.message.reply_text(fmt_payment_message("/crypto/gas-oracle", "Gas Oracle"))
+        elif result.get("error"):
             await query.message.reply_text(f"❌ {result['error']}")
         else:
             await query.message.reply_text(fmt_gas(result.get("data", {})), parse_mode="Markdown", reply_markup=main_menu())
     elif data == "nft":
         result = await api_get("/nft/floor-prices")
         if result.get("payment_required"):
-            text = fmt_payment_message("/nft/floor-prices", "NFT Floor Prices")
-            await query.message.reply_text(text, parse_mode="Markdown", reply_markup=payment_keyboard("/nft/floor-prices"))
+            await query.message.reply_text(fmt_payment_message("/nft/floor-prices", "NFT Floor Prices"))
         elif result.get("error"):
             await query.message.reply_text(f"❌ {result['error']}")
         else:
@@ -419,18 +396,17 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif data == "airdrops":
         result = await api_get("/crypto/airdrop-tracker")
         if result.get("payment_required"):
-            text = fmt_payment_message("/crypto/airdrop-tracker", "Airdrop Tracker")
-            await query.message.reply_text(text, parse_mode="Markdown", reply_markup=payment_keyboard("/crypto/airdrop-tracker"))
+            await query.message.reply_text(fmt_payment_message("/crypto/airdrop-tracker", "Airdrop Tracker"))
         elif result.get("error"):
             await query.message.reply_text(f"❌ {result['error']}")
         else:
             await query.message.reply_text(fmt_airdrops(result.get("data", {})), parse_mode="Markdown", reply_markup=main_menu())
     elif data == "yields":
-        await handle_paid_endpoint(update, ctx, "yields")
+        await handle_paid_endpoint(update, ctx, "yields", query.message)
     elif data == "tvl":
-        await handle_paid_endpoint(update, ctx, "tvl")
+        await handle_paid_endpoint(update, ctx, "tvl", query.message)
     elif data == "whales":
-        await handle_paid_endpoint(update, ctx, "whales")
+        await handle_paid_endpoint(update, ctx, "whales", query.message)
     elif data == "wallet_info":
         await query.message.reply_text(
             "👤 **Wallet Profile Analysis**\n\n"
@@ -450,13 +426,25 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
+# ============ POST-INIT: CLEAR WEBHOOK ============
+async def post_init(application):
+    """Clear any existing webhook before starting polling.
+    This prevents 'Conflict: terminated by other getUpdates request' errors
+    caused by stale webhooks or zombie processes from previous deploys."""
+    logger.info("🧹 Clearing any existing webhook...")
+    try:
+        await application.bot.delete_webhook(drop_pending_updates=True)
+        logger.info("✅ Webhook cleared (or none existed)")
+    except Exception as e:
+        logger.warning(f"⚠️ Webhook cleanup: {e}")
+
 # ============ MAIN ============
 def main():
     if not BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN not set!")
         return
 
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = Application.builder().token(BOT_TOKEN).post_init(post_init).build()
 
     # Commands
     app.add_handler(CommandHandler("start", cmd_start))
@@ -478,7 +466,10 @@ def main():
     logger.info(f"   API: {API_BASE}")
     logger.info(f"   Price: {PRICE_USDC} USDC/call")
 
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True
+    )
 
 if __name__ == "__main__":
     main()
