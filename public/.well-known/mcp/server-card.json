@@ -1,0 +1,96 @@
+{
+  "serverInfo": {
+    "name": "Kristo Intelligence",
+    "version": "5.0.0"
+  },
+  "authentication": {
+    "required": false,
+    "schemes": []
+  },
+  "tools": [
+    {
+      "name": "get_defi_yields",
+      "description": "Top 10 Base DeFi yield pools by TVL"
+    },
+    {
+      "name": "get_tvl_movers",
+      "description": "Base protocols with biggest 1-day TVL changes"
+    },
+    {
+      "name": "get_lending_rates",
+      "description": "Best lending and borrowing rates on Base"
+    },
+    {
+      "name": "get_dex_pools",
+      "description": "Top DEX liquidity pools on Base"
+    },
+    {
+      "name": "get_protocol_safety",
+      "description": "Risk scores for Base DeFi protocols"
+    },
+    {
+      "name": "get_token_launches",
+      "description": "Recently launched tokens on Base"
+    },
+    {
+      "name": "scan_token_security",
+      "description": "Rug-pull and honeypot detection scanner",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^0x[a-fA-F0-9]{40}$",
+            "description": "Token contract address on Base"
+          }
+        },
+        "required": ["address"]
+      }
+    },
+    {
+      "name": "get_wallet_profile",
+      "description": "On-chain wallet analysis and classification",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "pattern": "^0x[a-fA-F0-9]{40}$",
+            "description": "Wallet address to analyze"
+          }
+        },
+        "required": ["address"]
+      }
+    },
+    {
+      "name": "get_whale_moves",
+      "description": "Large USDC transfers on Base"
+    },
+    {
+      "name": "get_bridge_volume",
+      "description": "Cross-chain bridge volume to/from Base"
+    },
+    {
+      "name": "get_token_prices",
+      "description": "Real-time token prices (freemium)"
+    },
+    {
+      "name": "get_gas_oracle",
+      "description": "Base gas price estimates (freemium)"
+    },
+    {
+      "name": "get_intelligence_report",
+      "description": "Autonomous intelligence report"
+    },
+    {
+      "name": "get_api_stats",
+      "description": "Public API usage statistics"
+    },
+    {
+      "name": "get_pricing_info",
+      "description": "Detailed pricing information"
+    }
+  ],
+  "resources": [],
+  "prompts": []
+}
