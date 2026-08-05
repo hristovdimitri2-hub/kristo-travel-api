@@ -34,12 +34,26 @@ export async function GET() {
         description: 'Production Server',
       },
     ],
+    // Global security: all endpoints require x402 payment by default.
+    // Free endpoints override with security: [] below.
+    security: [{ x402: [] }],
+    components: {
+      securitySchemes: {
+        x402: {
+          type: 'http',
+          scheme: 'x402',
+          description:
+            'x402 pay-per-call protocol. Send USDC on Base to the payTo address, then retry with X-PAYMENT header containing the tx hash. 0.10 USDC per call. 10 free trial credits via X-TRIAL-WALLET header.',
+        },
+      },
+    },
     paths: {
       '/api/health': {
         get: {
           summary: 'System Health Check',
           description:
             'Returns system health status and current Base RPC block height.',
+          security: [],
           responses: {
             '200': { description: 'Health status details' },
           },
@@ -50,6 +64,7 @@ export async function GET() {
           summary: 'Public API Usage Statistics',
           description:
             'Returns overall request counts, total revenue, and active wallet metrics.',
+          security: [],
           responses: {
             '200': { description: 'Public usage statistics' },
           },
@@ -60,6 +75,7 @@ export async function GET() {
           summary: 'Recent Verified Sales',
           description:
             'Returns logs of recent verified x402 payment transactions.',
+          security: [],
           responses: {
             '200': { description: 'List of recent sales transactions' },
           },
@@ -70,6 +86,7 @@ export async function GET() {
           summary: 'Wallet Credits Check',
           description:
             'Queries remaining trial credits and balance for a specific wallet address.',
+          security: [],
           parameters: [
             {
               name: 'address',
@@ -89,6 +106,7 @@ export async function GET() {
           summary: 'Token Prices (Freemium)',
           description:
             'Fetches real-time market prices for specified tokens from CoinGecko.',
+          security: [],
           parameters: [
             {
               name: 'tokens',
@@ -108,6 +126,7 @@ export async function GET() {
           summary: 'Base Gas Oracle (Freemium)',
           description:
             'Provides current gas price estimates and cost calculations on Base L2.',
+          security: [],
           responses: {
             '200': { description: 'Base gas price estimates' },
           },
