@@ -5,6 +5,7 @@ import os
 import re
 import sqlite3
 import time
+from contextlib import asynccontextmanager
 from typing import Dict, Any, List, Optional
 
 import httpx
@@ -14,7 +15,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
+
+
+# ── Reverse-proxy-aware client IP extraction ──────────────────────────────
+def get_client_ip(request: Request) -> str:
+    """Get the real client IP, respecting X-Forwarded-For / X-Real-IP when behind a proxy (Render/Vercel)."""
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    return request.client.host if request.client else "unknown"
 
 # Configure logging
 logging.basicConfig(
@@ -43,6 +55,10 @@ TRIAL_FREE_CALLS = int(os.getenv("TRIAL_FREE_CALLS", "3"))
 VOLUME_DISCOUNT_THRESHOLD = int(os.getenv("VOLUME_DISCOUNT_THRESHOLD", "50"))
 VOLUME_DISCOUNT_PRICE = float(os.getenv("VOLUME_DISCOUNT_PRICE", "0.005"))  # FIX (2026-08-04): was 0.15, higher than base price — illogical
 REFERRAL_BONUS_PERCENT = float(os.getenv("REFERRAL_BONUS_PERCENT", "0.20"))
+ALLOWED_ORIGINS = [o.strip() for o in os.getenv(
+    "ALLOWED_ORIGINS",
+    "https://kristo-travel-dashboard.vercel.app,http://localhost:3000"
+).split(",") if o.strip()]
 
 # Freemium endpoints (free with rate limiting)
 FREEMIUM_ENDPOINTS = {"/crypto/token-prices", "/crypto/gas-oracle"}
@@ -143,6 +159,11 @@ def init_db():
             calls_7d INTEGER DEFAULT 0
         )
         """)
+        # Performance indexes (prevent slow queries once >1000 rows)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sales_timestamp ON sales(timestamp)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sales_endpoint ON sales(endpoint)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_sales_payer ON sales(payer_address)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_used_txs_hash ON used_txs(tx_hash)")
         conn.commit()
     logger.info(f"Database initialized at {DB_PATH}")
 
@@ -164,13 +185,35 @@ def print_config():
     print(f"  Rate Limit    : {RATE_LIMIT}")
     print("=" * 60)
 
+# Shared HTTP Client
+http_client: Optional[httpx.AsyncClient] = None
+
+# Application lifespan (replaces deprecated @app.on_event handlers)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global http_client
+    init_db()
+    print_config()
+    http_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(10.0, connect=5.0),
+        limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
+    )
+    # Start the autonomous intelligence engine
+    asyncio.create_task(intelligence_scheduler())
+    logger.info("🧠 Autonomous Intelligence Engine started — runs every hour")
+    yield
+    if http_client:
+        await http_client.aclose()
+        logger.info("HTTP client closed")
+
 # Setup Rate Limiter & FastAPI App
-limiter = Limiter(key_func=get_remote_address, default_limits=[RATE_LIMIT])
+limiter = Limiter(key_func=get_client_ip, default_limits=[RATE_LIMIT])
 app = FastAPI(
     title="Kristo Intelligence API",
     version="1.0.0",
     description="Production-ready pay-per-call API service for AI agents using x402 protocol on Base blockchain",
-    openapi_url=None  # We serve a custom /openapi.json
+    openapi_url=None,  # We serve a custom /openapi.json
+    lifespan=lifespan
 )
 
 app.state.limiter = limiter
@@ -179,31 +222,12 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS Middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["X-PAYMENT", "X-TRIAL-WALLET", "X-REFERRAL", "Content-Type"],
     expose_headers=["X-PAYMENT-REQUIRED", "X-PAYMENT-ACCEPTED"]
 )
-
-# Shared HTTP Client
-http_client: Optional[httpx.AsyncClient] = None
-
-@app.on_event("startup")
-async def startup_event():
-    global http_client
-    init_db()
-    print_config()
-    http_client = httpx.AsyncClient(timeout=15.0)
-    # Start the autonomous intelligence engine
-    asyncio.create_task(intelligence_scheduler())
-    logger.info("🧠 Autonomous Intelligence Engine started — runs every hour")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    global http_client
-    if http_client:
-        await http_client.aclose()
 
 # Helper RPC Caller
 async def rpc_call(method: str, params: list = None) -> Any:
@@ -474,8 +498,8 @@ async def custom_openapi_endpoint():
         "info": {
             "title": "Kristo Intelligence API",
             "version": "1.0.0",
-            "description": "Production-ready pay-per-call AI Agent Intelligence API powered by x402 on Base Blockchain (Chain ID 8453). "
-                           "Each paid endpoint requires payment of 0.01 USDC sent to 0xd4cdA980839C8FED4374EE37EA8DBE8c4ECfd88f via X-PAYMENT header.",
+            "description": f"Production-ready pay-per-call AI Agent Intelligence API powered by x402 on Base Blockchain (Chain ID 8453). "
+                           f"Each paid endpoint requires payment of {PRICE_USDC} USDC sent to {WALLET_ADDRESS} via X-PAYMENT header.",
             "x-402-pricing": {
                 "price_per_call_usdc": PRICE_USDC,
                 "amount_raw": str(PRICE_RAW),
@@ -1446,8 +1470,14 @@ async def run_intelligence_cycle():
             total_calls_24h = row["total"]
             total_revenue_24h = row["revenue"]
 
-            cursor.execute("SELECT COUNT(DISTINCT payer_address) as wallets FROM sales WHERE timestamp >= datetime('now', '-7 days' AND payer_address IS NOT NULL)")
-            unique_wallets = cursor.fetchone()["wallets"] if cursor.fetchone() else 0
+            cursor.execute("""
+                SELECT COUNT(DISTINCT payer_address) as wallets
+                FROM sales
+                WHERE timestamp >= datetime('now', '-7 days')
+                  AND payer_address IS NOT NULL
+            """)
+            row = cursor.fetchone()
+            unique_wallets = row["wallets"] if row else 0
 
             # 5. Dynamic pricing decisions
             pricing_changes = []
@@ -1707,10 +1737,15 @@ async def crypto_token_security_endpoint(
         r_symbol = rpc_call("eth_call", [{"to": address, "data": "0x95d89b41"}, "latest"])
         r_decimals = rpc_call("eth_call", [{"to": address, "data": "0x313ce567"}, "latest"])
         r_supply = rpc_call("eth_call", [{"to": address, "data": "0x18160ddd"}, "latest"])
+        r_owner = rpc_call("eth_call", [{"to": address, "data": "0x8da5cb5b"}, "latest"])
 
-        res_name, res_symbol, res_decimals, res_supply = await asyncio.gather(
-            r_name, r_symbol, r_decimals, r_supply
-        )
+        try:
+            res_name, res_symbol, res_decimals, res_supply, res_owner = await asyncio.wait_for(
+                asyncio.gather(r_name, r_symbol, r_decimals, r_supply, r_owner),
+                timeout=8.0
+            )
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="RPC timeout - Base node too slow")
 
         # Decode token info
         def decode_string(hex_val):
@@ -1740,10 +1775,7 @@ async def crypto_token_security_endpoint(
         total_supply = decode_uint(res_supply)
         total_supply_formatted = total_supply / (10 ** token_decimals) if total_supply > 0 else 0
 
-        # 3. Check if contract has mint function (0x40c10f19 = mint(address,uint256))
-        # Check if contract has owner/setOwner functions (0x8da5cb5b = owner())
-        r_owner = rpc_call("eth_call", [{"to": address, "data": "0x8da5cb5b"}, "latest"])
-        res_owner = await r_owner
+        # 3. Owner was fetched in parallel above (0x8da5cb5b = owner())
 
         owner_address = None
         if res_owner and res_owner != "0x" and len(res_owner) >= 66:
@@ -1913,10 +1945,10 @@ async def x402_discovery():
         "network": "base",
         "chain_id": 8453,
         "asset": "USDC",
-        "price_per_call": "0.25",
+        "price_per_call": str(PRICE_USDC),
         "pay_to": WALLET_ADDRESS,
         "accepts": {
-            "amount": "0.25",
+            "amount": str(PRICE_USDC),
             "asset": "USDC",
             "chain": "base",
             "payTo": WALLET_ADDRESS
@@ -1942,7 +1974,7 @@ async def x402_discovery():
 async def llms_txt():
     """Human-readable API description for AI crawlers (llms.txt standard)."""
     from fastapi.responses import PlainTextResponse
-    txt = """# Kristo Intelligence — Pay-Per-Call DeFi API for AI Agents
+    txt = f"""# Kristo Intelligence — Pay-Per-Call DeFi API for AI Agents
 
 ## Overview
 Pay-per-call DeFi intelligence API on Base blockchain (Chain ID 8453).
@@ -1952,18 +1984,18 @@ Uses x402 HTTP 402 Payment Required protocol for micropayments in USDC.
 https://kristo-intelligence-api.onrender.com
 
 ## Pricing
-- Paid endpoints: 0.25 USDC per call (USDC on Base mainnet)
+- Paid endpoints: {PRICE_USDC} USDC per call (USDC on Base mainnet)
 - Freemium: Free with rate limiting (token prices, gas oracle)
-- Trial: First 3 calls free for new wallets
-- Volume: 0.15 USDC/call after 50 paid calls
+- Trial: First {TRIAL_FREE_CALLS} calls free for new wallets
+- Volume: {VOLUME_DISCOUNT_PRICE} USDC/call after {VOLUME_DISCOUNT_THRESHOLD} paid calls
 
 ## Payment Flow
 1. Call a paid endpoint → HTTP 402 with payment details
-2. Send 0.01 USDC to payTo address on Base
+2. Send {PRICE_USDC} USDC to payTo address on Base
 3. Retry with X-PAYMENT header (transaction hash)
 4. Server verifies on-chain, returns data
 
-## Paid Endpoints (0.01 USDC/call)
+## Paid Endpoints ({PRICE_USDC} USDC/call)
 - GET /defi/yields — Top 10 Base DeFi yield pools by TVL
 - GET /defi/tvl-movers — Biggest 1-day TVL changes
 - GET /defi/lending-rates — Best lending/borrowing rates (Aave, Moonwell, Morpho)
@@ -1997,20 +2029,20 @@ async def agents_json():
             "network": "base",
             "chain_id": 8453,
             "asset": "USDC",
-            "price_per_call": 0.01,
+            "price_per_call": PRICE_USDC,
             "pay_to": WALLET_ADDRESS
         },
         "tools": [
-            {"name": "defi_yields", "endpoint": "/defi/yields", "paid": True, "price_usdc": 0.01},
-            {"name": "tvl_movers", "endpoint": "/defi/tvl-movers", "paid": True, "price_usdc": 0.01},
-            {"name": "lending_rates", "endpoint": "/defi/lending-rates", "paid": True, "price_usdc": 0.01},
-            {"name": "dex_pools", "endpoint": "/defi/dex-pools", "paid": True, "price_usdc": 0.01},
-            {"name": "protocol_safety", "endpoint": "/defi/protocol-safety", "paid": True, "price_usdc": 0.01},
-            {"name": "token_launches", "endpoint": "/crypto/token-launches", "paid": True, "price_usdc": 0.01},
-            {"name": "token_security", "endpoint": "/crypto/token-security", "paid": True, "price_usdc": 0.01},
-            {"name": "wallet_profile", "endpoint": "/crypto/wallet-profile", "paid": True, "price_usdc": 0.01},
-            {"name": "whale_moves", "endpoint": "/crypto/whale-moves", "paid": True, "price_usdc": 0.01},
-            {"name": "bridge_volume", "endpoint": "/crypto/bridge-volume", "paid": True, "price_usdc": 0.01},
+            {"name": "defi_yields", "endpoint": "/defi/yields", "paid": True, "price_usdc": PRICE_USDC},
+            {"name": "tvl_movers", "endpoint": "/defi/tvl-movers", "paid": True, "price_usdc": PRICE_USDC},
+            {"name": "lending_rates", "endpoint": "/defi/lending-rates", "paid": True, "price_usdc": PRICE_USDC},
+            {"name": "dex_pools", "endpoint": "/defi/dex-pools", "paid": True, "price_usdc": PRICE_USDC},
+            {"name": "protocol_safety", "endpoint": "/defi/protocol-safety", "paid": True, "price_usdc": PRICE_USDC},
+            {"name": "token_launches", "endpoint": "/crypto/token-launches", "paid": True, "price_usdc": PRICE_USDC},
+            {"name": "token_security", "endpoint": "/crypto/token-security", "paid": True, "price_usdc": PRICE_USDC},
+            {"name": "wallet_profile", "endpoint": "/crypto/wallet-profile", "paid": True, "price_usdc": PRICE_USDC},
+            {"name": "whale_moves", "endpoint": "/crypto/whale-moves", "paid": True, "price_usdc": PRICE_USDC},
+            {"name": "bridge_volume", "endpoint": "/crypto/bridge-volume", "paid": True, "price_usdc": PRICE_USDC},
             {"name": "token_prices", "endpoint": "/crypto/token-prices", "paid": False},
             {"name": "gas_oracle", "endpoint": "/crypto/gas-oracle", "paid": False}
         ],
